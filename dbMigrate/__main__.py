@@ -5,7 +5,7 @@ import sys, os, os.path
 import logging
 import psycopg2
 
-#import dbMigrate
+import dbMigrate
 
 def getMandatoryEnvVar(varName):
     logger = logging.getLogger(__name__)
@@ -54,6 +54,7 @@ if __name__ == '__main__':
 
     if args.fromVersion == '1.0' and args.toVersion == '2.0':
         logger.info('Migrating from version "%s" in schema "%s" to version "%s" in schema "%s"', args.fromVersion, args.fromSchema, args.toVersion, args.toSchema)
+        dbMigrate.migrate1to2(dbConnection=dbConnection, fromSchema=args.fromSchema, toSchema=args.toSchema, replaceToSchema=args.replaceExisting)
     else:
         logger.error('Migration from version "%s" to version "%s" is not supported.', args.fromVersion, args.toVersion)
         sys.exit(1)
