@@ -55,3 +55,6 @@ docs/_build/
 
 # PyBuilder
 target/
+
+# data files used in testing
+ddata.xml
