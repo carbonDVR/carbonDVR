@@ -1,0 +1,8 @@
+# Validate changes at:
+#     http://lint.travis-ci.org/
+language: python
+python:
+  - "3.4"
+
+script: python -m unittest discover recorder
+
