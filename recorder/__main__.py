@@ -26,7 +26,7 @@ if __name__ == '__main__':
     dbConnectString = getMandatoryEnvVar('DB_CONNECT_STRING')
     hdhomerunBinary = getMandatoryEnvVar('HDHOMERUN_BINARY')
     videoFilespec = getMandatoryEnvVar('VIDEO_FILESPEC')
-    logFilespec = getMandatoryEnvVar('LOG_FILESPEC')
+    logFilespec = getMandatoryEnvVar('VIDEO_LOG_FILESPEC')
 
     dbConnection = psycopg2.connect(dbConnectString)
 
