@@ -5,7 +5,7 @@ import logging
 import psycopg2
 
 from carbonDVRDatabase import CarbonDVRDatabase
-from hdhomerun import HDHomeRun
+from hdhomerun import HDHomeRunInterface
 from recorder import Recorder
 
 def getMandatoryEnvVar(varName):
@@ -35,12 +35,13 @@ if __name__ == '__main__':
         logger.info('DB_SCHEMA=%s', schema)
         with dbConnection.cursor() as cursor:
             cursor.execute("SET SCHEMA %s", (schema, ))
+        dbConnection.commit()
 
-    dbInterface = carbonDVRDatabase(dbConnection, schema)
+    dbInterface = CarbonDVRDatabase(dbConnection)
 
     channels = dbInterface.getChannels()
     tuners = dbInterface.getTuners()
-    hdhomerun = HDHomeRun(channels, tuner, hdhomerunBinary)
+    hdhomerun = HDHomeRunInterface(channels, tuners, hdhomerunBinary)
 
     recorder = Recorder(hdhomerun, dbInterface, videoFilespec, logFilespec)
     recorder.run()
