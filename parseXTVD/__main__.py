@@ -5,6 +5,7 @@ import logging
 import os
 import parseXTVD
 import psycopg2
+import sys
 
 if __name__ == '__main__':
     FORMAT = "%(asctime)-15s: %(name)s:  %(message)s"
