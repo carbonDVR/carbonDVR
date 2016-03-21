@@ -3,16 +3,17 @@
 import sys, os, os.path
 import logging
 import psycopg2
+import pytz
 
-from carbonDVRDatabase import CarbonDVRDatabase
-from hdhomerun import HDHomeRunInterface
-from recorder import Recorder
+import recorder
+
+from apscheduler.schedulers.background import BlockingScheduler
 
 def getMandatoryEnvVar(varName):
     logger = logging.getLogger(__name__)
     value = os.environ.get(varName)
     if value is None:
-        logger.error('%s environment variable is not set', envVar)
+        logger.error('%s environment variable is not set', varName)
         sys.exit(1)
     logger.info('%s=%s', varName, value)
     return value
@@ -27,6 +28,7 @@ if __name__ == '__main__':
     hdhomerunBinary = getMandatoryEnvVar('HDHOMERUN_BINARY')
     videoFilespec = getMandatoryEnvVar('VIDEO_FILESPEC')
     logFilespec = getMandatoryEnvVar('VIDEO_LOG_FILESPEC')
+    commandPipeFilespec = getMandatoryEnvVar('RECORDER_COMMUNICATION_PIPE')
 
     dbConnection = psycopg2.connect(dbConnectString)
 
@@ -37,12 +39,16 @@ if __name__ == '__main__':
             cursor.execute("SET SCHEMA %s", (schema, ))
         dbConnection.commit()
 
-    dbInterface = CarbonDVRDatabase(dbConnection)
+    recorderDBInterface = recorder.CarbonDVRDatabase(dbConnection)
 
-    channels = dbInterface.getChannels()
-    tuners = dbInterface.getTuners()
-    hdhomerun = HDHomeRunInterface(channels, tuners, hdhomerunBinary)
+    channels = recorderDBInterface.getChannels()
+    tuners = recorderDBInterface.getTuners()
+    hdhomerun = recorder.HDHomeRunInterface(channels, tuners, hdhomerunBinary)
 
-    recorder = Recorder(hdhomerun, dbInterface, videoFilespec, logFilespec)
-    recorder.run()
+    scheduler = BlockingScheduler(timezone=pytz.utc)
+    logging.getLogger('apscheduler').setLevel(logging.WARNING)    # turn down the logging from apscheduler
+
+    recorder = recorder.Recorder(scheduler, hdhomerun, recorderDBInterface, videoFilespec, logFilespec, commandPipeFilespec)
+
+    scheduler.start();
 

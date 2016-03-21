@@ -2,24 +2,30 @@ import pytz
 import signal
 import logging
 
-from apscheduler.schedulers.background import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime, timedelta
-from hdhomerun import UnrecognizedChannelException, NoTunersAvailableException, BadRecordingException
+from .hdhomerun import UnrecognizedChannelException, NoTunersAvailableException, BadRecordingException
 
 
 class Recorder:
-    def __init__(self, hdhomerunInterface, dbInterface, videoFilespec, logFilespec):
+    def __init__(self, scheduler, hdhomerunInterface, dbInterface, videoFilespec, logFilespec, commandPipeFilespec=None):
         self.logger = logging.getLogger(__name__)
+        self.scheduler = scheduler
         self.hdhomerunInterface = hdhomerunInterface
         self.dbInterface = dbInterface
         self.videoFilespec = videoFilespec
         self.logFilespec = logFilespec
+        self.commandPipeFilespec = commandPipeFilespec
+        signal.signal(signal.SIGHUP, self.sighup_handler)
+        self.scheduleRecordings()
+        self.scheduler.add_job(self.scheduleRecordings, trigger=CronTrigger(hour='0,6,12,18', minute='40'), misfire_grace_time=600)
+        if self.commandPipeFilespec is not None:
+            self.scheduler.add_job(self.readPipeCommands, misfire_grace_time=86400)
 
     def sighup_handler(self, signum, frame):
         self.logger.info("Received SIGHUP")
-        self.scheduleJobs()
+        self.scheduleRecordings()
 
     def removeAllRecordingJobs(self):
         self.logger.debug('Removing recording jobs')
@@ -28,8 +34,8 @@ class Recorder:
                 self.logger.debug('Removing job: {}'.format(job))
                 self.scheduler.remove_job(job.id)
 
-    def scheduleJobs(self):
-        self.logger.info("Scheduling jobs")
+    def scheduleRecordings(self):
+        self.logger.info("Scheduling recordings")
         self.removeAllRecordingJobs()
         pendingRecordings = self.dbInterface.getPendingRecordings(timedelta(hours=12))
         pendingRecordings.sort(key=lambda pendingRecording: pendingRecording.startTime) # not really necessary, just makes log files easier to follow
@@ -52,13 +58,11 @@ class Recorder:
         except (UnrecognizedChannelException, NoTunersAvailableException, BadRecordingException):
             self.logger.error("Recording failed")
 
-    def run(self):
-        logging.getLogger('apscheduler').setLevel(logging.WARNING)    # turn down the logging from apscheduler
-        self.scheduler = BlockingScheduler(timezone=pytz.utc)
-        signal.signal(signal.SIGHUP, self.sighup_handler)
-        self.scheduler.add_job(self.scheduleJobs, trigger=CronTrigger(hour='0,6,12,18', minute='40'), misfire_grace_time=600)
-        self.scheduleJobs()
-        self.scheduler.start()
-
-
+    def readPipeCommands(self):
+        cmdPipe = open(self.commandPipeFilespec,'r')
+        for line in cmdPipe:
+            if line.casefold() == 'reschedule\n'.casefold():
+                self.scheduleRecordings()
+        cmdPipe.close()
+        self.scheduler.add_job(self.readPipeCommands, misfire_grace_time=86400)
 

@@ -1,7 +1,8 @@
 import unittest
 import os
 import psycopg2
-from carbonDVRDatabase import CarbonDVRDatabase
+#from carbonDVRDatabase import CarbonDVRDatabase
+from recorder import CarbonDVRDatabase
 from datetime import timedelta
 
 

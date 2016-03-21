@@ -108,19 +108,19 @@ class HDHomeRunInterface:
         self.logger.info("Logging to {}".format(logFile))
         logFileHandle = io.open(logFile, "w+")
         # set tuner to channel
-        cmd = [self.hdhomerunBinary, tuner.ipAddress, "set", "/tuner%s/channel" % tuner.tunerID, channelInfo.channelActual]
+        cmd = [self.hdhomerunBinary, tuner.ipAddress, "set", '/tuner{}/channel'.format(tuner.tunerID), '{}'.format(channelInfo.channelActual)]
         self.logger.info("Tuning channel: {}".format(cmd))
         subprocess.Popen(cmd, stdout=logFileHandle, stderr=subprocess.STDOUT).wait()
         # set tuner to program
-        cmd = [self.hdhomerunBinary, tuner.ipAddress, "set", "/tuner%s/program" % tuner.tunerID, channelInfo.program]
+        cmd = [self.hdhomerunBinary, tuner.ipAddress, "set", '/tuner{}/program'.format(tuner.tunerID), '{}'.format(channelInfo.program)]
         self.logger.info("Selecting program: {}".format(cmd))
         subprocess.Popen(cmd, stdout=logFileHandle, stderr=subprocess.STDOUT).wait()
         # check tuner status
-        cmd = [self.hdhomerunBinary, tuner.ipAddress, "get", "/tuner%s/status" % tuner.tunerID]
+        cmd = [self.hdhomerunBinary, tuner.ipAddress, "get", '/tuner{}/status'.format(tuner.tunerID)]
         self.logger.info("Checking tuner status: {}".format(cmd))
         subprocess.Popen(cmd, stdout=logFileHandle, stderr=subprocess.STDOUT).wait()
         # start recording
-        cmd = [self.hdhomerunBinary, tuner.ipAddress, "save", "/tuner%s" % tuner.tunerID, destFile]
+        cmd = [self.hdhomerunBinary, tuner.ipAddress, "save", '/tuner{}'.format(tuner.tunerID), destFile]
         self.logger.info("Recording: {}".format(cmd))
         processHandle = subprocess.Popen(cmd, stdout=logFileHandle, stderr=subprocess.STDOUT)
         # sleep until time to stop recording
@@ -128,7 +128,8 @@ class HDHomeRunInterface:
         duration = endTime - currentTime
         self.logger.info("Recording for {} seconds".format(duration.total_seconds()))
         time.sleep(duration.total_seconds())
-        os.kill(processHandle.pid, signal.SIGINT)
+        self.logger.info("Sending SIGTERM to process {}".format(processHandle.pid))
+        os.kill(processHandle.pid, signal.SIGTERM)
         processHandle.wait()
         logFileHandle.close()
         # release tuner
