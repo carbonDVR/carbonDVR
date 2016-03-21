@@ -1,0 +1,31 @@
+{% extends "base_template.html" %}
+{% block htmlTitle %}Show List{% endblock %}
+{% block title %}Show List{% endblock %}
+
+{% block body %}
+Subscriptions
+<TABLE class="report">
+  <TR>
+    <TH colspan=2>Show</TH>
+  </TR>
+{% for show in subscribedShows %}
+  <TR>
+    <TD><A HREF="{{url_for('unsubscribe', showID=show.showID)}}">unsubscribe</A></TD>
+    <TD class="left">{{show.name}}</TD>
+  </TR>
+{% endfor %}
+</TABLE>
+<P>
+Shows
+<TABLE class="report">
+  <TR>
+    <TH colspan=2>Show</TH>
+  </TR>
+{% for show in unsubscribedShows %}
+  <TR>
+    <TD><A HREF="{{url_for('subscribe', showID=show.showID)}}">subscribe</A></TD>
+    <TD class="left">{{show.name}}</TD>
+  </TR>
+{% endfor %}
+</TABLE>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base_template.html" %}
+{% block htmlTitle %}Recordings{% endblock %}
+{% block title %}Recordings{% endblock %}
+
+{% block body %}
+<TABLE class="report">
+  <TR>
+    <TH>Show</TH>
+    <TH>Episode</TH>
+    <TH>ID</TH>
+    <TH colspan=2 class='right'>Date Recorded</TH>
+    <TH class='right'>Duration</TH>
+  </TR>
+{% for recording in recordings %}
+  <TR>
+    <TD class="left">{{recording.show}}</TD>
+    <TD class="left">E{{recording.episodeNumber}}: {{recording.episode}}</TD>
+    <TD>{{recording.recordingID}}</TD>
+    <TD class='flush_right'>{{recording.dateRecorded.strftime('%a, %b %d %I:%M')}}</TD>
+    <TD class='flush_left'>{{recording.dateRecorded.strftime('%p')}}</TD>
+    <TD class="right">{{recording.duration}}</TD>
+  </TR>
+{% endfor %}
+</TABLE>
+{% endblock %}
+

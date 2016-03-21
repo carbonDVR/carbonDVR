@@ -1,0 +1,64 @@
+{% extends "base_template.html" %}
+{% block htmlTitle %}Database Inconsistencies{% endblock %}
+{% block title %}Database Inconsistencies{% endblock %}
+
+{% block body %}
+<P>
+Recordings without file records
+<TABLE class="report">
+  <TR>
+    <TH>RecordingID</TH>
+    <TH>Show</TH>
+    <TH>Episode</TH>
+    <TH colspan=2 class='right'>Date Recorded</TH>
+  </TR>
+{% for recording in recordingsWithoutFileRecords %}
+  <TR>
+    <TD>{{recording.recordingID}}</TD>
+    <TD>{{recording.show}}</TD>
+    <TD>{{recording.episode}}</TD>
+    <TD class='date1'>{{recording.dateRecorded.strftime('%a, %b %d %I:%M')}}</TD>
+    <TD class='date2'>{{recording.dateRecorded.strftime('%p')}}</TD>
+  </TR>
+{% endfor %}
+</TABLE>
+
+<P>
+
+File records without recordings
+<TABLE class="report">
+  <TR>
+    <TH>RecordingID</TH>
+    <TH>Raw Video</TH>
+    <TH>Transcoded Video</TH>
+    <TH>Bif</TH>
+  </TR>
+{% for file in fileRecordsWithoutRecordings %}
+  <TR>
+    <TD>{{file.recordingID}}</TD>
+    <TD>{{file.rawVideo}}</TD>
+    <TD>{{file.transcodedVideo}}</TD>
+    <TD>{{file.bif}}</TD>
+  </TR>
+{% endfor %}
+</TABLE>
+
+<P>
+
+Raw video files that can be deleted
+<TABLE class="report">
+  <TR>
+    <TH>RecordingID</TH>
+    <TH>Raw Video</TH>
+    <TH>Transcoded Video</TH>
+  </TR>
+{% for file in rawVideoFilesThatCanBeDeleted %}
+  <TR>
+    <TD>{{file.recordingID}}</TD>
+    <TD>{{file.rawVideo}}</TD>
+    <TD>{{file.transcodedVideo}}</TD>
+  </TR>
+{% endfor %}
+</TABLE>
+
+{% endblock %}

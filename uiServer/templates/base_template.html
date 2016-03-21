@@ -1,0 +1,99 @@
+<HTML>
+<HEAD>
+<TITLE>{% block htmlTitle %}Page Title{% endblock %}</TITLE>
+<style type="text/css">
+  body {
+    background-color: rgb(100%,100%,85%);
+    }
+  .pageheader {
+    background-color: white;
+    font-size: 120%;
+    font-weight: bold;
+    padding: 0.5em 0.5em 0.5em 0.5em;
+    border: 1px solid black;
+    }
+  .pageBody {
+    xpadding-left: 0.5em;
+    }
+  td {
+    white-space: nowrap;
+    }
+  table.title {
+    }
+  table tr.titlebar td {
+    margin-bottom: 0.0em;
+    padding-bottom: 0.0em;
+    }
+  table tr.linkbar td {
+    margin-top: 0.0em;
+    padding-top: 0.0em;
+    padding-right: 1.0em;
+    }
+  table.report {
+    background-color: white;
+    border: 1px solid black;
+    padding: 1em;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    }
+  table.report th {
+    background-color: white;
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+    font-weight: bold;
+    font-size: 90%;
+    text-align: center;
+    border-bottom: 1px solid black;
+    vertical-align: bottom;
+    }
+  table.report th.left {
+    text-align: left;
+    }
+  table.report th.rght {
+    text-align: right;
+    }
+  table.report td {
+    background-color: white;
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+    text-align: right;
+    }
+  table.report td.left {
+    text-align: left;
+    }
+  table.report td.right {
+    text-align: left;
+    }
+  table.report td.flush_right {
+    padding-right: 0em;
+    text-align: right;
+    }
+  table.report td.flush_left {
+    padding-left: 0em;
+    text-align: right;
+    }
+</style>
+</HEAD>
+<BODY>
+<DIV class="PageHeader">
+<TABLE width=100% class="title">
+  <TR valign="bottom" class="titlebar">
+    <TD style="font-weight: bold; font-size: 120%; text-align: left" colspan=10>{% block title %}Title{% endblock %}</TD>
+  </TR>
+  <TR valign="top" class="linkbar">
+    <TD style="font-weight: normal; font-size: 80%; text-align: left"><A HREF="{{url_for('index')}}">Home</A></TD>
+    <TD style="font-weight: normal; font-size: 80%; text-align: left"><A HREF="{{url_for('getAllRecordings')}}">Recorded Shows</A></TD>
+    <TD style="font-weight: normal; font-size: 80%; text-align: left"><A HREF="{{url_for('getRecentRecordings')}}">Recently Recorded Shows</A></TD>
+    <TD style="font-weight: normal; font-size: 80%; text-align: left"><A HREF="{{url_for('getUpcomingRecordings')}}">Upcoming Recordings</A></TD>
+    <TD style="font-weight: normal; font-size: 80%; text-align: left"><A HREF="{{url_for('getShowList')}}">Shows</A></TD>
+    <TD width="100%">&nbsp;</TD>
+  </TR>
+</TABLE>
+</DIV>
+<DIV class="PageBody">
+{% block body %}
+Page Body
+{% endblock %}
+</DIV>
+</BODY>
+</HTML>

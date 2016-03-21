@@ -1,0 +1,23 @@
+{% extends "base_template.html" %}
+{% block htmlTitle %}Upcoming Recordings{% endblock %}
+{% block title %}Upcoming Recordings{% endblock %}
+
+{% block body %}
+<TABLE class="report">
+  <TR>
+    <TH colspan=2>Start Time</TH>
+    <TH>Channel</TH>
+    <TH>Show</TH>
+    <TH>Episode</TH>
+  </TR>
+{% for schedule in schedules %}
+  <TR>
+    <TD class="flush_right">{{schedule.startTime.strftime('%a, %b %d %I:%M')}}</TD>
+    <TD class="flush_left">{{schedule.startTime.strftime('%p')}}</TD>
+    <TD class="right">{{schedule.channel}}</TD>
+    <TD class="left">{{schedule.show}}</TD>
+    <TD class="left">E{{schedule.episodeNumber}}: {{schedule.episode}}</TD>
+  </TR>
+{% endfor %}
+</TABLE>
+{% endblock %}

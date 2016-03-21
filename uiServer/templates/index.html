@@ -1,0 +1,25 @@
+{% extends "base_template.html" %}
+{% block htmlTitle %}CarbonDVR{% endblock %}
+{% block title %}CarbonDVR{% endblock %}
+
+{% block body %}
+<P>
+<A HREF="{{url_for('getAllRecordings')}}">Recorded Shows</A>
+<P>
+<A HREF="{{url_for('getUpcomingRecordings')}}">Upcoming Recordings</A>
+<P>
+<A HREF="{{url_for('getRecentRecordings')}}">Recent Recordings</A>
+<P>
+<A HREF="{{url_for('getShowList')}}">Shows</A>
+<P>
+<BR>
+<BR>
+<BR>
+<BR>
+<A HREF="{{url_for('scheduleTestRecording')}}">Schedule Test Recording</A>
+<P>
+<A HREF="{{url_for('getDatabaseInconsistencies')}}">Database Inconsistencies</A>
+<P>
+<BR>
+{% endblock %}
+
