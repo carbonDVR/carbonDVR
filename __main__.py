@@ -6,6 +6,8 @@ import psycopg2
 import pytz
 
 import recorder
+import uiServer
+
 
 from apscheduler.schedulers.background import BlockingScheduler
 
@@ -39,16 +41,20 @@ if __name__ == '__main__':
             cursor.execute("SET SCHEMA %s", (schema, ))
         dbConnection.commit()
 
-    recorderDBInterface = recorder.CarbonDVRDatabase(dbConnection)
-
-    channels = recorderDBInterface.getChannels()
-    tuners = recorderDBInterface.getTuners()
-    hdhomerun = recorder.HDHomeRunInterface(channels, tuners, hdhomerunBinary)
-
     scheduler = BlockingScheduler(timezone=pytz.utc)
     logging.getLogger('apscheduler').setLevel(logging.WARNING)    # turn down the logging from apscheduler
 
+    recorderDBInterface = recorder.CarbonDVRDatabase(dbConnection)
+    channels = recorderDBInterface.getChannels()
+    tuners = recorderDBInterface.getTuners()
+    hdhomerun = recorder.HDHomeRunInterface(channels, tuners, hdhomerunBinary)
     recorder = recorder.Recorder(scheduler, hdhomerun, recorderDBInterface, videoFilespec, logFilespec, commandPipeFilespec)
+
+    uiServer.uiServerApp.dbConnection = dbConnection
+    uiServer.uiServerApp.pipeToRecorder = commandPipeFilespec
+    scheduler.add_job(uiServer.uiServerApp.run(host='0.0.0.0',port=8085,debug=True), misfire_grace_time=86400)
+#    scheduler.add_job(uiServer.uiServerApp.run(host='0.0.0.0',port=8085), misfire_grace_time=86400)
+
 
     scheduler.start();
 

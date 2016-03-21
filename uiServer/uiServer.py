@@ -200,50 +200,50 @@ def sendRescheduleToRecorder(pipeToRecorder):
 
 
 
-app = Flask(__name__)
+uiServerApp = Flask(__name__)
 
 
-@app.route('/')
+@uiServerApp.route('/')
 def index():
     return render_template('index.html')
 
-@app.route('/recordings')
+@uiServerApp.route('/recordings')
 def getAllRecordings():
     recordings = dbGetAllRecordings(current_app.dbConnection)
     return render_template('allRecordings.html', recordings=recordings)
 
-@app.route('/recentRecordings')
+@uiServerApp.route('/recentRecordings')
 def getRecentRecordings():
     recordings = dbGetRecentRecordings(current_app.dbConnection)
     return render_template('recentRecordings.html', recordings=recordings)
 
-@app.route('/upcomingRecordings')
+@uiServerApp.route('/upcomingRecordings')
 def getUpcomingRecordings():
     schedules = dbGetUpcomingRecordings(current_app.dbConnection)
     return render_template('upcomingRecordings.html', schedules=schedules)
 
-@app.route('/showList')
+@uiServerApp.route('/showList')
 def getShowList():
     shows = dbGetShowList(current_app.dbConnection)
     return render_template('showList.html', subscribedShows=shows.subscribed, unsubscribedShows=shows.unsubscribed)
 
-@app.route('/subscribe/<showID>')
+@uiServerApp.route('/subscribe/<showID>')
 def subscribe(showID):
     dbSubscribe(current_app.dbConnection, showID)
     return redirect(url_for('getShowList'))    
 
-@app.route('/unsubscribe/<showID>')
+@uiServerApp.route('/unsubscribe/<showID>')
 def unsubscribe(showID):
     dbUnsubscribe(current_app.dbConnection, showID)
     return redirect(url_for('getShowList'))    
 
-@app.route('/databaseInconsistencies')
+@uiServerApp.route('/databaseInconsistencies')
 def getDatabaseInconsistencies():
     inconsistencies = dbGetInconsistencies(current_app.dbConnection)
     return render_template('databaseInconsistencies.html', recordingsWithoutFileRecords=inconsistencies.recordingsWithoutFileRecords,
         fileRecordsWithoutRecordings=inconsistencies.fileRecordsWithoutRecordings, rawVideoFilesThatCanBeDeleted=inconsistencies.rawVideoFilesThatCanBeDeleted)
 
-@app.route('/scheduleTestRecording')
+@uiServerApp.route('/scheduleTestRecording')
 def scheduleTestRecording():
     dbScheduleTestRecording(current_app.dbConnection)
     sendRescheduleToRecorder(current_app.pipeToRecorder)
