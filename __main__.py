@@ -6,10 +6,13 @@ import psycopg2
 import pytz
 
 import recorder
-import uiServer
+import webServer
+
+class ConfigHolder:
+    pass
 
 
-from apscheduler.schedulers.background import BlockingScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 
 def getMandatoryEnvVar(varName):
     logger = logging.getLogger(__name__)
@@ -32,6 +35,16 @@ if __name__ == '__main__':
     logFilespec = getMandatoryEnvVar('VIDEO_LOG_FILESPEC')
     commandPipeFilespec = getMandatoryEnvVar('RECORDER_COMMUNICATION_PIPE')
 
+    uiConfig = ConfigHolder()
+    uiConfig.uiServerURL = getMandatoryEnvVar('UISERVER_UISERVER_URL')
+
+    restConfig = ConfigHolder()
+    restConfig.genericSDPosterURL = getMandatoryEnvVar('RESTSERVER_GENERIC_SD_POSTER_URL')
+    restConfig.genericHDPosterURL = getMandatoryEnvVar('RESTSERVER_GENERIC_HD_POSTER_URL')
+    restConfig.restServerURL = getMandatoryEnvVar('RESTSERVER_RESTSERVER_URL')
+    restConfig.streamURL = getMandatoryEnvVar('RESTSERVER_STREAM_URL')
+    restConfig.bifURL = getMandatoryEnvVar('RESTSERVER_BIF_URL')
+
     dbConnection = psycopg2.connect(dbConnectString)
 
     schema = os.environ.get('DB_SCHEMA')
@@ -41,7 +54,7 @@ if __name__ == '__main__':
             cursor.execute("SET SCHEMA %s", (schema, ))
         dbConnection.commit()
 
-    scheduler = BlockingScheduler(timezone=pytz.utc)
+    scheduler = BackgroundScheduler(timezone=pytz.utc)
     logging.getLogger('apscheduler').setLevel(logging.WARNING)    # turn down the logging from apscheduler
 
     recorderDBInterface = recorder.CarbonDVRDatabase(dbConnection)
@@ -50,11 +63,10 @@ if __name__ == '__main__':
     hdhomerun = recorder.HDHomeRunInterface(channels, tuners, hdhomerunBinary)
     recorder = recorder.Recorder(scheduler, hdhomerun, recorderDBInterface, videoFilespec, logFilespec, commandPipeFilespec)
 
-    uiServer.uiServerApp.dbConnection = dbConnection
-    uiServer.uiServerApp.pipeToRecorder = commandPipeFilespec
-    scheduler.add_job(uiServer.uiServerApp.run(host='0.0.0.0',port=8085,debug=True), misfire_grace_time=86400)
-#    scheduler.add_job(uiServer.uiServerApp.run(host='0.0.0.0',port=8085), misfire_grace_time=86400)
-
-
     scheduler.start();
+
+    webServer.webServerApp.restServer = webServer.RestServer(dbConnection, restConfig.genericSDPosterURL, restConfig.genericHDPosterURL, restConfig.restServerURL, restConfig.streamURL, restConfig.bifURL)
+    webServer.webServerApp.uiServer = webServer.UIServer(dbConnection, uiConfig.uiServerURL, commandPipeFilespec)
+#    webServer.webServerApp.run(host='0.0.0.0',port=8085,debug=True)
+    webServer.webServerApp.run(host='0.0.0.0',port=8085)
 
