@@ -33,7 +33,6 @@ if __name__ == '__main__':
     hdhomerunBinary = getMandatoryEnvVar('HDHOMERUN_BINARY')
     videoFilespec = getMandatoryEnvVar('VIDEO_FILESPEC')
     logFilespec = getMandatoryEnvVar('VIDEO_LOG_FILESPEC')
-    commandPipeFilespec = getMandatoryEnvVar('RECORDER_COMMUNICATION_PIPE')
 
     uiConfig = ConfigHolder()
     uiConfig.uiServerURL = getMandatoryEnvVar('UISERVER_UISERVER_URL')
@@ -61,12 +60,16 @@ if __name__ == '__main__':
     channels = recorderDBInterface.getChannels()
     tuners = recorderDBInterface.getTuners()
     hdhomerun = recorder.HDHomeRunInterface(channels, tuners, hdhomerunBinary)
-    recorder = recorder.Recorder(scheduler, hdhomerun, recorderDBInterface, videoFilespec, logFilespec, commandPipeFilespec)
+    recorder = recorder.Recorder(scheduler, hdhomerun, recorderDBInterface, videoFilespec, logFilespec)
 
     scheduler.start();
 
+    def scheduleRecordingsCallback():
+        recorder.scheduleRecordings()
+
+
     webServer.webServerApp.restServer = webServer.RestServer(dbConnection, restConfig.genericSDPosterURL, restConfig.genericHDPosterURL, restConfig.restServerURL, restConfig.streamURL, restConfig.bifURL)
-    webServer.webServerApp.uiServer = webServer.UIServer(dbConnection, uiConfig.uiServerURL, commandPipeFilespec)
+    webServer.webServerApp.uiServer = webServer.UIServer(dbConnection, uiConfig.uiServerURL, scheduleRecordingsCallback)
 #    webServer.webServerApp.run(host='0.0.0.0',port=8085,debug=True)
     webServer.webServerApp.run(host='0.0.0.0',port=8085)
 

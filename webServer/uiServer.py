@@ -15,10 +15,10 @@ class Bunch():
 
 
 class UIServer:
-    def __init__(self, dbConnection, uiServerURL, pipeToRecorder):
+    def __init__(self, dbConnection, uiServerURL, scheduleRecordingsCallback):
         self.dbConnection = dbConnection
         self.uiServerURL = uiServerURL
-        self.pipeToRecorder = pipeToRecorder
+        self.scheduleRecordingsCallback = scheduleRecordingsCallback
 
     def makeURL(self, endpoint):
         return self.uiServerURL + endpoint
@@ -196,16 +196,6 @@ class UIServer:
         self.dbConnection.commit()
 
 
-    def sendRescheduleToRecorder(self):
-        try:
-            fdPipe = os.open(self.pipeToRecorder, os.O_WRONLY|os.O_NONBLOCK)
-        except:
-            fdPipe = None
-        if fdPipe is not None:
-            os.write(fdPipe, bytes('reschedule\n','ascii'))
-            os.close(fdPipe)
-
-
     def getIndex(self):
         return render_template('index.html')
 
@@ -246,5 +236,5 @@ class UIServer:
 
     def scheduleTestRecording(self):
         self.dbScheduleTestRecording()
-        self.sendRescheduleToRecorder()
+        self.scheduleRecordingsCallback()
 

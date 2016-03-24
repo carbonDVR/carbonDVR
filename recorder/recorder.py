@@ -9,19 +9,16 @@ from .hdhomerun import UnrecognizedChannelException, NoTunersAvailableException,
 
 
 class Recorder:
-    def __init__(self, scheduler, hdhomerunInterface, dbInterface, videoFilespec, logFilespec, commandPipeFilespec=None):
+    def __init__(self, scheduler, hdhomerunInterface, dbInterface, videoFilespec, logFilespec):
         self.logger = logging.getLogger(__name__)
         self.scheduler = scheduler
         self.hdhomerunInterface = hdhomerunInterface
         self.dbInterface = dbInterface
         self.videoFilespec = videoFilespec
         self.logFilespec = logFilespec
-        self.commandPipeFilespec = commandPipeFilespec
         signal.signal(signal.SIGHUP, self.sighup_handler)
         self.scheduleRecordings()
         self.scheduler.add_job(self.scheduleRecordings, trigger=CronTrigger(hour='0,6,12,18', minute='40'), misfire_grace_time=600)
-        if self.commandPipeFilespec is not None:
-            self.scheduler.add_job(self.readPipeCommands, misfire_grace_time=86400)
 
     def sighup_handler(self, signum, frame):
         self.logger.info("Received SIGHUP")
@@ -58,11 +55,4 @@ class Recorder:
         except (UnrecognizedChannelException, NoTunersAvailableException, BadRecordingException):
             self.logger.error("Recording failed")
 
-    def readPipeCommands(self):
-        cmdPipe = open(self.commandPipeFilespec,'r')
-        for line in cmdPipe:
-            if line.casefold() == 'reschedule\n'.casefold():
-                self.scheduleRecordings()
-        cmdPipe.close()
-        self.scheduler.add_job(self.readPipeCommands, misfire_grace_time=86400)
 
