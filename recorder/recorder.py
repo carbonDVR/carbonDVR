@@ -1,6 +1,7 @@
 import pytz
 import signal
 import logging
+import threading
 
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
@@ -8,9 +9,11 @@ from datetime import datetime, timedelta
 from .hdhomerun import UnrecognizedChannelException, NoTunersAvailableException, BadRecordingException
 
 
+
 class Recorder:
     def __init__(self, scheduler, hdhomerunInterface, dbInterface, videoFilespec, logFilespec):
         self.logger = logging.getLogger(__name__)
+        self.schedulingLock = threading.Lock()
         self.scheduler = scheduler
         self.hdhomerunInterface = hdhomerunInterface
         self.dbInterface = dbInterface
@@ -32,14 +35,15 @@ class Recorder:
                 self.scheduler.remove_job(job.id)
 
     def scheduleRecordings(self):
-        self.logger.info("Scheduling recordings")
-        self.removeAllRecordingJobs()
-        pendingRecordings = self.dbInterface.getPendingRecordings(timedelta(hours=12))
-        pendingRecordings.sort(key=lambda pendingRecording: pendingRecording.startTime) # not really necessary, just makes log files easier to follow
-        for pendingRecording in pendingRecordings:
-            self.logger.info("Scheduling recording on channel {}-{} at {}".
-                format(pendingRecording.channelMajor, pendingRecording.channelMinor, pendingRecording.startTime.astimezone(pytz.timezone('US/Central'))))
-            self.scheduler.add_job(self.record, args = [pendingRecording], trigger = 'date', run_date = pendingRecording.startTime, misfire_grace_time=60)
+        with self.schedulingLock:
+            self.logger.info("Scheduling recordings")
+            self.removeAllRecordingJobs()
+            pendingRecordings = self.dbInterface.getPendingRecordings(timedelta(hours=12))
+            pendingRecordings.sort(key=lambda pendingRecording: pendingRecording.startTime) # not really necessary, just makes log files easier to follow
+            for pendingRecording in pendingRecordings:
+                self.logger.info("Scheduling recording on channel {}-{} at {}".
+                    format(pendingRecording.channelMajor, pendingRecording.channelMinor, pendingRecording.startTime.astimezone(pytz.timezone('US/Central'))))
+                self.scheduler.add_job(self.record, args = [pendingRecording], trigger = 'date', run_date = pendingRecording.startTime, misfire_grace_time=60)
 
     def record(self, schedule):
         self.logger.info("Recording channel {}-{}".format(schedule.channelMajor, schedule.channelMinor))
