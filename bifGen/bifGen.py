@@ -1,0 +1,194 @@
+#!/usr/bin/env python3.4
+
+import psycopg2
+import logging
+import time
+import os
+import shutil
+import subprocess
+import tempfile
+
+
+def getFiles(path):
+    files = []
+    for entry in os.listdir(path):
+        spec = os.path.join(path, entry)
+        if os.path.isfile(spec):
+            files.append(spec)
+    return files
+
+
+def getFilesByExt(path, targetExt):
+    files = []
+    for entry in os.listdir(path):
+        spec = os.path.join(path, entry)
+        ext = os.path.splitext(entry)[1]
+        if os.path.isfile(spec) and ext.casefold() == targetExt.casefold():
+            files.append(spec)
+    return files
+
+
+# untested funcion to generate BIF files from image files
+# downloaded from: https://bitbucket.org/bcl/homevideo/src/tip/server/makebif.py
+# it would certainly be nice to not have to depend on biftool, esp since biftool doesn't allow you to specify destination file
+import struct
+import array
+def experimental_makeBIF( filename, directory, interval ):
+    """
+    Build a .bif file for the Roku Player Tricks Mode
+
+    @param filename name of .bif file to create
+    @param directory Directory of image files 00000001.jpg
+    @param interval Time, in milliseconds, between the images
+    """
+    magic = [0x89,0x42,0x49,0x46,0x0d,0x0a,0x1a,0x0a]
+    version = 0
+
+    files = os.listdir("%s" % (directory))
+    images = []
+    for image in files:
+        if image[-4:] == '.jpg':
+            images.append(image)
+    images.sort()
+
+    f = open(filename, "wb")
+    array.array('B', magic).tofile(f)
+    f.write(struct.pack("<1I", version))
+    f.write(struct.pack("<1I", len(images)))
+    f.write(struct.pack("<1I", int(interval)))
+    array.array('B', [0x00 for x in range(20,64)]).tofile(f)
+
+    bifTableSize = 8 + (8 * len(images))
+    imageIndex = 64 + bifTableSize
+    timestamp = 0
+
+    # Get the length of each image
+    for image in images:
+        statinfo = os.stat("%s/%s" % (directory, image))
+        f.write(struct.pack("<1I", timestamp))
+        f.write(struct.pack("<1I", imageIndex))
+
+        timestamp += 1
+        imageIndex += statinfo.st_size
+
+    f.write(struct.pack("<1I", 0xffffffff))
+    f.write(struct.pack("<1I", imageIndex))
+
+    # Now copy the images
+    for image in images:
+        data = open("%s/%s" % (directory, image), "rb").read()
+        f.write(data)
+
+    f.close()
+
+
+
+class BifGen:
+
+    def __init__(self, dbConnection, imageCommand, bifCommand, workingDir, imageDir, bifFilespec, frameInterval):
+        self.logger = logging.getLogger(__name__)
+        self.dbConnection = dbConnection
+        self.ffmpegCommand = imageCommand
+        self.biftoolCommand = bifCommand
+        self.workingDir = workingDir
+        self.scratchDir = imageDir
+        self.bifFilespec = bifFilespec
+        self.frameInterval = frameInterval
+        self.isBusy = False
+        # log configuration settings
+        self.logger.info("Template ffmepg command: {}".format(self.ffmpegCommand))
+        self.logger.info("Template biftool command: {}".format(self.biftoolCommand))
+        self.logger.info("working directory: {}".format(self.workingDir))
+        self.logger.info("scratch directory: {}".format(self.scratchDir))
+        self.logger.info("bif filespec: {}".format(self.bifFilespec))
+        self.logger.info("frame interval: {}ms".format(self.frameInterval))
+
+    def dbGetRecordingsToBif(self):
+        recordings = []
+        cursor = self.dbConnection.cursor()
+        cursor.execute("SELECT recording_id, filename FROM file_transcoded_video WHERE state = %s AND recording_id NOT IN (SELECT recording_id FROM file_bif);", (0, ))
+        for row in cursor:
+            recordings.append({'recordingID':row[0], 'filename':row[1]})
+        cursor.close()
+        self.dbConnection.commit()
+        return recordings
+
+    def dbInsertBifFileLocation(self, recordingID, filename):
+        cursor = self.dbConnection.cursor()
+        cursor.execute("INSERT INTO file_bif(recording_id, filename) VALUES (%s, %s)", (recordingID, filename))
+        cursor.close()
+        self.dbConnection.commit()
+
+    def clearWorkingDirectory(self):
+        self.logger.info("Clearing working directory {}".format(self.workingDir))
+        for file in getFiles(self.workingDir):
+            os.unlink(file)
+
+    def clearScratchDirectory(self):
+        self.logger.info("Clearing scratch directory {}".format(self.scratchDir))
+        for file in getFilesByExt(self.scratchDir, '.jpg'):
+            os.unlink(file)
+
+    def imageFile(self, fileNumber):
+        return os.path.join(self.scratchDir, '{:0>8}.jpg'.format(fileNumber))
+#
+# Notes on BIF process
+#
+# The "-itsoffset -1" in the ffmpeg command is to generate the image files 1 second before the actual video timestamp.  This helps to make the result of
+# ffwd/rewind seem more natural.
+#     The stream cannot start playing until an I-frame, so if your images are exactly lined up with the timestamp in the video, it's almost guaranteed
+#     that the video will start playing a few moments *after* the image in the ffwd/rewind.
+#
+# After ffmpeg has generated the thumbnails, we have to renumber them.  When ffmpeg generates them, the files are numbered starting from 00000001, but
+# biftool wants the files to be numbered from 00000000
+#
+# biftool supports specifying a source, but does not support specifying a destination.  Output is simply dumped to the current working dir.
+#
+#
+
+    def bifRecording(self, recording):
+        recordingID = recording['recordingID']
+        self.logger.info("Biffing recording {}".format(recordingID))
+        # prep
+        self.clearWorkingDirectory()
+        self.clearScratchDirectory()
+        os.chdir(self.workingDir)
+        # generate thumbnails
+        framesPerSecond = 1000 / self.frameInterval
+        cmd = self.ffmpegCommand.format(videoFile=recording['filename'], framesPerSecond=framesPerSecond, imageDir=self.scratchDir)
+        self.logger.info("Running ffmpeg ({})".format(cmd))
+        outfile = tempfile.TemporaryFile("w+")
+        subprocess.call(cmd.split(), stdout=outfile, stderr=subprocess.STDOUT)
+        # renumber thumbnails
+        self.logger.info("Renumbering thumbnails")
+        i = 0
+        while os.path.isfile(self.imageFile(i+1)):
+            os.rename(self.imageFile(i+1), self.imageFile(i))
+            i = i + 1
+        # run biftool
+        cmd = self.biftoolCommand.format(frameInterval=self.frameInterval, imageDir=self.scratchDir)
+        self.logger.info("Running biftool ({})".format(cmd))
+        outfile = tempfile.TemporaryFile("w+")
+        subprocess.call(cmd.split(), stdout=outfile, stderr=subprocess.STDOUT)
+        # move bif file to correct location
+        bifDestination = self.bifFilespec.format(recordingID=recordingID)
+        self.logger.info("Relocating bif file to {}".format(bifDestination))
+        shutil.move(getFilesByExt(self.workingDir, '.bif')[0], bifDestination)
+        # try experimental BIF function
+        experimentalID = str(recordingID) + "experimental"
+        destFile = self.bifFilespec.format(recordingID=experimentalID)
+        experimental_makeBIF(destFile, self.scratchDir, self.frameInterval)
+        # mark recording as "biffed"
+        self.dbInsertBifFileLocation(recordingID, bifDestination)
+        # cleanup
+        self.clearScratchDirectory()
+
+    def bifRecordings(self):
+        if self.isBusy:
+            return
+        self.isBusy = True
+        recordings = self.dbGetRecordingsToBif()
+        for recording in recordings[:1]:
+            self.bifRecording(recording)
+        self.isBusy = False
+
