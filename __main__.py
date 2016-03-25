@@ -6,6 +6,7 @@ import psycopg2
 import pytz
 
 import recorder
+import transcoder
 import webServer
 
 class ConfigHolder:
@@ -13,6 +14,7 @@ class ConfigHolder:
 
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 
 def getMandatoryEnvVar(varName):
     logger = logging.getLogger(__name__)
@@ -34,6 +36,13 @@ if __name__ == '__main__':
     videoFilespec = getMandatoryEnvVar('VIDEO_FILESPEC')
     logFilespec = getMandatoryEnvVar('VIDEO_LOG_FILESPEC')
 
+    transcoderConfig = ConfigHolder()
+    transcoderConfig.lowCommand = getMandatoryEnvVar('TRANSCODER_COMMAND_LOW')
+    transcoderConfig.mediumCommand = getMandatoryEnvVar('TRANSCODER_COMMAND_MEDIUM')
+    transcoderConfig.highCommand = getMandatoryEnvVar('TRANSCODER_COMMAND_HIGH')
+    transcoderConfig.outputFilespec = getMandatoryEnvVar('TRANSCODER_VIDEO_FILESPEC')
+    transcoderConfig.logFilespec = getMandatoryEnvVar('TRANSCODER_LOG_FILESPEC')
+
     uiConfig = ConfigHolder()
     uiConfig.uiServerURL = getMandatoryEnvVar('UISERVER_UISERVER_URL')
 
@@ -54,13 +63,18 @@ if __name__ == '__main__':
         dbConnection.commit()
 
     scheduler = BackgroundScheduler(timezone=pytz.utc)
-    logging.getLogger('apscheduler').setLevel(logging.WARNING)    # turn down the logging from apscheduler
+    logging.getLogger('apscheduler').setLevel(logging.WARNING)            # turn down the logging from apscheduler
+    logging.getLogger('apscheduler.scheduler').setLevel(logging.ERROR)    # turn down the logging from apscheduler
 
     recorderDBInterface = recorder.CarbonDVRDatabase(dbConnection)
     channels = recorderDBInterface.getChannels()
     tuners = recorderDBInterface.getTuners()
     hdhomerun = recorder.HDHomeRunInterface(channels, tuners, hdhomerunBinary)
     recorder = recorder.Recorder(scheduler, hdhomerun, recorderDBInterface, videoFilespec, logFilespec)
+
+    transcoder = transcoder.Transcoder(dbConnection, transcoderConfig.lowCommand, transcoderConfig.mediumCommand, transcoderConfig.highCommand,
+        transcoderConfig.outputFilespec, transcoderConfig.logFilespec)
+    scheduler.add_job(transcoder.transcodeRecordings, trigger=IntervalTrigger(seconds=60))
 
     scheduler.start();
 
