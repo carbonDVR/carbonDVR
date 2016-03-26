@@ -109,7 +109,7 @@ class BifGen:
           cursor.execute("INSERT INTO file_bif(recording_id, filename) VALUES (%s, %s)", (recordingID, filename))
 
     def clearImageDirectory(self):
-        self.logger.info("Clearing image directory {}".format(self.imageDir))
+        self.logger.debug("Clearing image directory {}".format(self.imageDir))
         for file in getFilesByExt(self.imageDir, '.jpg'):
             os.unlink(file)
 
@@ -139,18 +139,20 @@ class BifGen:
         outfile = tempfile.TemporaryFile("w+")
         subprocess.call(cmd.split(), stdout=outfile, stderr=subprocess.STDOUT)
         # renumber thumbnails
-        self.logger.info("Renumbering thumbnails")
+        self.logger.debug("Renumbering thumbnails")
         i = 0
         while os.path.isfile(self.imageFile(i+1)):
             os.rename(self.imageFile(i+1), self.imageFile(i))
             i = i + 1
         # generate BIF file
         bifFile = self.bifFilespec.format(recordingID=recordingID)
+        self.logger.info("Generating BIF file {}".format(bifFile))
         makeBIF(bifFile, self.imageDir, self.frameInterval)
         # mark recording as "biffed"
         self.dbInsertBifFileLocation(recordingID, bifFile)
         # cleanup
         self.clearImageDirectory()
+        self.logger.info("BIF generation complete")
 
     def bifRecordings(self):
         with self.workingLock:
