@@ -82,10 +82,6 @@ CREATE TABLE playback_position (
   position       int4
   );
 
-CREATE TABLE archive_state (
-  recording_id   int4 PRIMARY KEY,
-  state          integer
-  );
 
 -- used in recorder.py
 CREATE OR REPLACE VIEW recorded_episodes_by_id AS

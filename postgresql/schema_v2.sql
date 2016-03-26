@@ -92,11 +92,6 @@ CREATE TABLE playback_position (
   position       int4
   );
 
-CREATE TABLE archive_state (
-  recording_id   int4 PRIMARY KEY,
-  state          integer
-  );
-
 CREATE OR REPLACE VIEW recorded_episodes_by_id AS
   SELECT recording.recording_id, recording.show_id, recording.episode_id
   FROM recording
