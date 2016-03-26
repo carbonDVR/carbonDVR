@@ -91,11 +91,10 @@ class BifGen:
         self.imageDir = imageDir
         self.bifFilespec = bifFilespec
         self.frameInterval = frameInterval
-        # log configuration settings
-        self.logger.info("Template ffmepg command: {}".format(self.ffmpegCommand))
-        self.logger.info("image directory: {}".format(self.imageDir))
-        self.logger.info("bif filespec: {}".format(self.bifFilespec))
-        self.logger.info("frame interval: {}ms".format(self.frameInterval))
+        self.logger.debug("Template ffmepg command: {}".format(self.ffmpegCommand))
+        self.logger.debug("Image directory: {}".format(self.imageDir))
+        self.logger.debug("BIF filespec: {}".format(self.bifFilespec))
+        self.logger.debug("Frame interval: {}ms".format(self.frameInterval))
 
     def dbGetRecordingsToBif(self):
         recordings = []

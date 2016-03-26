@@ -32,12 +32,11 @@ class Transcoder:
         self.transcodedVideoFilespec = outputFilespec
         self.logFilespec = logFilespec
         self.isTranscoding = False
-        # log configuration
-        self.logger.info("Template ffmpeg command (low): {}".format(self.ffmpegCommand_low))
-        self.logger.info("Template ffmpeg command (medium): {}".format(self.ffmpegCommand_medium))
-        self.logger.info("Template ffmpeg command (high): {}".format(self.ffmpegCommand_high))
-        self.logger.info("Transcoded video filespec: {}".format(self.transcodedVideoFilespec))
-        self.logger.info("Log filespec: {}".format(self.logFilespec))
+        self.logger.debug("Template ffmpeg command (low): {}".format(self.ffmpegCommand_low))
+        self.logger.debug("Template ffmpeg command (medium): {}".format(self.ffmpegCommand_medium))
+        self.logger.debug("Template ffmpeg command (high): {}".format(self.ffmpegCommand_high))
+        self.logger.debug("Transcoded video filespec: {}".format(self.transcodedVideoFilespec))
+        self.logger.debug("Log filespec: {}".format(self.logFilespec))
 
     def dbSelectRecordingsToTranscode(self):
         recordings = []

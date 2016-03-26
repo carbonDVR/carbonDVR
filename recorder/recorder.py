@@ -1,5 +1,4 @@
 import pytz
-import signal
 import logging
 import threading
 
@@ -19,13 +18,8 @@ class Recorder:
         self.dbInterface = dbInterface
         self.videoFilespec = videoFilespec
         self.logFilespec = logFilespec
-        signal.signal(signal.SIGHUP, self.sighup_handler)
         self.scheduleRecordings()
         self.scheduler.add_job(self.scheduleRecordings, trigger=CronTrigger(hour='0,6,12,18', minute='40'), misfire_grace_time=600)
-
-    def sighup_handler(self, signum, frame):
-        self.logger.info("Received SIGHUP")
-        self.scheduleRecordings()
 
     def removeAllRecordingJobs(self):
         self.logger.debug('Removing recording jobs')
