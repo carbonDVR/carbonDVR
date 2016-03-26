@@ -44,19 +44,23 @@ class Transcoder:
             cursor.execute("SELECT recording_id, filename FROM file_raw_video WHERE recording_id NOT IN (SELECT recording_id FROM file_transcoded_video);")
             for row in cursor:
                 recordings.append({'recordingID':row[0], 'filename':row[1]})
+        self.dbConnection.commit()
         return recordings
 
     def dbGetDuration(self, recordingID):
+        duration = datetime.timedelta(seconds=0)
         with self.dbConnection.cursor() as cursor:
             cursor.execute("SELECT duration FROM recording WHERE recording_id = %s;", (recordingID,))
             row = cursor.fetchone()
-            if row is None:
-                return datetime.timedelta(seconds=0)
-            return row[0]
+            if row :
+                duration = row[0]
+        self.dbConnection.commit()
+        return duration
 
     def dbInsertTranscodedFileLocation(self, recordingID, filename, state):
         with self.dbConnection.cursor() as cursor:
             cursor.execute("INSERT INTO file_transcoded_video(recording_id, filename, state) VALUES (%s, %s, %s)", (recordingID, filename, state))
+        self.dbConnection.commit()
 
     def transcode(self, recordingID, sourceFile, destFile, logFile, duration):
         self.logger.info("Transcoding {} to {}".format(sourceFile, destFile))

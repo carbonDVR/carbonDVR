@@ -28,12 +28,14 @@ class Cleanup:
             cursor.execute(query)
             for row in cursor:
                 records.append(Bunch(recordingID=row[0], filename=row[1]))
+        self.dbConnection.commit()
         return records
 
 
     def dbDeleteRawVideoRecord(self, recordingID):
         with self.dbConnection.cursor() as cursor:
             cursor.execute('DELETE FROM file_raw_video WHERE recording_id = %s', (recordingID, ))
+        self.dbConnection.commit()
 
 
     def purgeUnreferencedRawVideoRecords(self):
@@ -57,12 +59,14 @@ class Cleanup:
             cursor.execute(query)
             for row in cursor:
                 records.append(Bunch(recordingID=row[0], filename=row[1]))
+        self.dbConnection.commit()
         return records
 
 
     def dbDeleteTranscodedVideoRecord(self, recordingID):
         with self.dbConnection.cursor() as cursor:
             cursor.execute('DELETE FROM file_transcoded_video WHERE recording_id = %s', (recordingID, ))
+        self.dbConnection.commit()
 
 
     def purgeUnreferencedTranscodedVideoRecords(self):
@@ -86,12 +90,14 @@ class Cleanup:
             cursor.execute(query)
             for row in cursor:
                 records.append(Bunch(recordingID=row[0], filename=row[1]))
+        self.dbConnection.commit()
         return records
 
 
     def dbDeleteBifRecord(self, recordingID):
         with self.dbConnection.cursor() as cursor:
             cursor.execute('DELETE FROM file_bif WHERE recording_id = %s', (recordingID, ))
+        self.dbConnection.commit()
 
 
     def purgeUnreferencedBifRecords(self):
@@ -116,6 +122,7 @@ class Cleanup:
             cursor.execute(query)
             for row in cursor:
                 records.append(Bunch(recordingID=row[0], filename=row[1]))
+        self.dbConnection.commit()
         return records
 
 

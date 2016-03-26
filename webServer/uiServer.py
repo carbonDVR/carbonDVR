@@ -38,6 +38,7 @@ class UIServer:
                 episodeNumber = row[2].encode('ascii', 'xmlcharrefreplace').decode('ascii')  # compensate for Python's inability to cope with unicode
                 episode = row[3].encode('ascii', 'xmlcharrefreplace').decode('ascii')        # compensate for Python's inability to cope with unicode
                 recordings.append(Bunch(recordingID=row[0], show=show, episode=episode, episodeNumber=episodeNumber, dateRecorded=row[4], duration=row[5]))
+        self.dbConnection.commit()
         return recordings
 
 
@@ -57,6 +58,7 @@ class UIServer:
                 episodeNumber = row[2].encode('ascii', 'xmlcharrefreplace').decode('ascii')  # compensate for Python's inability to cope with unicode
                 episode = row[3].encode('ascii', 'xmlcharrefreplace').decode('ascii')        # compensate for Python's inability to cope with unicode
                 recordings.append(Bunch(recordingID=row[0], show=show, episodeNumber=episodeNumber, episode=episode, dateRecorded=row[4], duration=row[5]))
+        self.dbConnection.commit()
         return recordings
 
 
@@ -81,6 +83,7 @@ class UIServer:
                 episodeNumber = row[5].encode('ascii', 'xmlcharrefreplace').decode('ascii')  # compensate for Python's inability to cope with unicode
                 episode = row[6].encode('ascii', 'xmlcharrefreplace').decode('ascii')        # compensate for Python's inability to cope with unicode
                 schedules.append(Bunch(scheduleID=row[0], startTime=row[1], channel=channel, show=show, episodeNumber=episodeNumber, episode=episode))
+        self.dbConnection.commit()
         schedules.sort(key=lambda schedule: schedule.startTime)
         return schedules
 
@@ -99,17 +102,20 @@ class UIServer:
                 showID = row[0]
                 showName = row[1].encode('ascii', 'xmlcharrefreplace').decode('ascii')  # compensate for Python's inability to cope with unicode
                 unsubscribedShows.append(Bunch(showID=showID, name=showName))
+        self.dbConnection.commit()
         return Bunch(subscribed=subscribedShows, unsubscribed=unsubscribedShows)
 
 
     def dbSubscribe(self, showID):
         with self.dbConnection.cursor() as cursor:
             cursor.execute('INSERT INTO subscription (show_id, priority) VALUES (%s, %s);', (showID, 0 ))
+        self.dbConnection.commit()
 
 
     def dbUnsubscribe(self, showID):
         with self.dbConnection.cursor() as cursor:
             cursor.execute('DELETE FROM subscription WHERE show_id = %s;', (showID, ))
+        self.dbConnection.commit()
 
 
     def dbGetInconsistencies(self):
@@ -148,16 +154,19 @@ class UIServer:
             cursor.execute(query)
             for row in cursor:
                 rawVideoFilesThatCanBeDeleted.append(Bunch(recordingID=row[0], rawVideo=row[1], transcodedVideo=row[2]))
+        self.dbConnection.commit()
         return Bunch(recordingsWithoutFileRecords=recordingsWithoutFileRecords, fileRecordsWithoutRecordings=fileRecordsWithoutRecordings, rawVideoFilesThatCanBeDeleted=rawVideoFilesThatCanBeDeleted)
 
 
     def dbGetNextScheduleID(self):
+        scheduleID = None
         with self.dbConnection.cursor() as cursor:
             cursor.execute("SELECT nextval('schedule_schedule_id_seq');", ())
             row = cursor.fetchone()
-            if row == None:
-                return None
-            return row[0]
+            if row:
+                scheduleID = row[0]
+        self.dbConnection.commit()
+        return scheduleID
 
 
     def dbInsertTestShow(self):
@@ -180,6 +189,7 @@ class UIServer:
             query = str("INSERT INTO schedule (schedule_id, channel_major, channel_minor, start_time, duration, show_id, episode_id, rerun_code) "
                         "VALUES (%s, '19', '1', now() at time zone 'utc' + '30 seconds', '2 minutes', 'test', %s, 'R');")
             cursor.execute(query, (uniqueID, uniqueID))
+        self.dbConnection.commit()
 
 
     def getIndex(self):

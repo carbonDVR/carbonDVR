@@ -38,6 +38,7 @@ class CarbonDVRDatabase:
           cursor.execute("SELECT major, minor, actual, program FROM channel")
           for row in cursor:
             channels.append(ChannelInfo(channelMajor=row[0], channelMinor=row[1], channelActual=row[2], program=row[3]))
+        self.connection.commit()
         return channels
 
     def getTuners(self):
@@ -46,6 +47,7 @@ class CarbonDVRDatabase:
           cursor.execute("SELECT device_id, ipaddress, tuner_id FROM tuner")
           for row in cursor:
             tuners.append(TunerInfo(deviceID=row[0], ipAddress=row[1], tunerID=row[2]))
+        self.connection.commit()
         return tuners
 
     def getPendingRecordings(self, lookaheadTime):
@@ -64,24 +66,33 @@ class CarbonDVRDatabase:
             cursor.execute(query, (lookaheadTime, ))
             for row in cursor:
                 schedules.append(Bunch(channelMajor=row[1], channelMinor=row[2], startTime=row[3], duration=row[4], showID=row[5], episodeID=row[6], rerunCode=row[7]))
+        self.connection.commit()
         return schedules
 
     def getUniqueID(self):
+        uniqueID = None
         with self.connection.cursor() as cursor:
             cursor.execute("SELECT nextval('uniqueid');", ())
-            if not cursor:
-                return None
-            return cursor.fetchone()[0]
+            if cursor:
+                uniqueID = cursor.fetchone()[0]
+        self.connection.commit()
+        return uniqueID
 
     def insertRecording(self, recordingID, showID, episodeID, duration, rerunCode):
+        rowCount = 0
         with self.connection.cursor() as cursor:
             query = str("INSERT INTO recording(recording_id, show_id, episode_id, date_recorded, duration, rerun_code) "
                         "VALUES (%s, %s, %s, now(), %s, %s);")
             cursor.execute(query, (recordingID, showID, episodeID, duration, rerunCode))
-            return cursor.rowcount
+            rowCount = cursor.rowcount
+        self.connection.commit()
+        return rowCount
 
     def insertRawVideoLocation(self, recordingID, filename):
+        rowCount = 0
         with self.connection.cursor() as cursor:
             cursor.execute("INSERT INTO file_raw_video(recording_id, filename) VALUES (%s, %s);", (recordingID, filename))
-            return cursor.rowcount
+            rowCount = cursor.rowcount
+        self.connection.commit()
+        return rowCount
 

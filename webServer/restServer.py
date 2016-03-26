@@ -85,6 +85,7 @@ class RestServer:
             cursor.execute(query, (tuple(categoryCodes), ))
             for row in cursor:
                 shows.append({'showID':row[0], 'name':row[1], 'imageURL':row[2]})
+        self.dbConnection.commit()
         return shows
 
 
@@ -107,10 +108,12 @@ class RestServer:
                 episodeTitle = row[3].encode('ascii', 'xmlcharrefreplace').decode('ascii')           # compensate for Python's inability to cope with unicode
                 episodeDescription = row[4].encode('ascii', 'xmlcharrefreplace').decode('ascii')     # compensate for Python's inability to cope with unicode
                 recordings.append({'recordingID':row[0], 'showID':row[1], 'episodeID':row[2], 'episodeTitle':episodeTitle, 'episodeDescription':episodeDescription, 'imageURL':row[5], 'showImageURL':row[6], 'episodeNumber':row[2]})
+        self.dbConnection.commit()
         return recordings
 
 
     def dbGetRecordingData(self, recordingID):
+        recordingData = None
         query = str("SELECT recording.recording_id, show.name, show.imageurl, episode.title, episode.description, (recording.date_recorded), "
                     "  recording.duration, substring(episode.episode_id from '[[:digit:]]*') "
                     "FROM recording, show, episode "
@@ -121,46 +124,53 @@ class RestServer:
         with self.dbConnection.cursor() as cursor:
             cursor.execute(query, (recordingID, ))
             row = cursor.fetchone()
-            if row == None:
-                return None
-            showName = row[1].encode('ascii', 'xmlcharrefreplace').decode('ascii')               # compensate for Python's inability to cope with unicode
-            showName = row[1].encode('ascii', 'xmlcharrefreplace').decode('ascii')               # compensate for Python's inability to cope with unicode
-            episodeTitle = row[3].encode('ascii', 'xmlcharrefreplace').decode('ascii')           # compensate for Python's inability to cope with unicode
-            episodeDescription = row[4].encode('ascii', 'xmlcharrefreplace').decode('ascii')     # compensate for Python's inability to cope with unicode
-            return {'recordingID':row[0], 'showName':showName, 'imageURL':row[2], 'episodeTitle':episodeTitle, 'episodeDescription':episodeDescription, 'dateRecorded':row[5], 'duration':row[6], 'episodeNumber':row[7]}
+            if row:
+                recordingData = {}
+                showName = row[1].encode('ascii', 'xmlcharrefreplace').decode('ascii')               # compensate for Python's inability to cope with unicode
+                showName = row[1].encode('ascii', 'xmlcharrefreplace').decode('ascii')               # compensate for Python's inability to cope with unicode
+                episodeTitle = row[3].encode('ascii', 'xmlcharrefreplace').decode('ascii')           # compensate for Python's inability to cope with unicode
+                episodeDescription = row[4].encode('ascii', 'xmlcharrefreplace').decode('ascii')     # compensate for Python's inability to cope with unicode
+                recordingData = {'recordingID':row[0], 'showName':showName, 'imageURL':row[2], 'episodeTitle':episodeTitle, 'episodeDescription':episodeDescription, 'dateRecorded':row[5], 'duration':row[6], 'episodeNumber':row[7]}
+        self.dbConnection.commit()
+        return recordingData
 
 
     def dbDeleteRecording(self, recordingID):
         with self.dbConnection.cursor() as cursor:
             cursor.execute('DELETE FROM recording WHERE recording_id = %s;', (recordingID, ))
+        self.dbConnection.commit()
 
     def dbSetPlaybackPosition(self, recordingID, playbackPosition):
         with self.dbConnection.cursor() as cursor:
             cursor.execute('UPDATE playback_position SET position = %s WHERE recording_id = %s;', (playbackPosition, recordingID))
             if cursor.rowcount == 0:
                 cursor.execute('INSERT INTO playback_position (recording_id, position) VALUES (%s, %s);', (recordingID, playbackPosition))
+        self.dbConnection.commit()
 
     def dbGetPlaybackPosition(self, recordingID):
+        playbackPosition = 0
         with self.dbConnection.cursor() as cursor:
             cursor.execute('SELECT position FROM playback_position WHERE recording_id = %s;', (recordingID, ))
             row = cursor.fetchone()
-            if row is None:
-                return {'playbackPosition': 0 }
-            else:
-                return {'playbackPosition': row[0] }
+            if row:
+                playbackPosition = row[0]
+        self.dbConnection.commit()
+        return {'playbackPosition': playbackPosition}
 
     def dbSetCategoryCode(self, recordingID, categoryCode):
         with self.dbConnection.cursor() as cursor:
             cursor.execute('UPDATE recording SET rerun_code = %s WHERE recording_id = %s;', (categoryCode, recordingID))
+        self.dbConnection.commit()
 
     def dbGetCategoryCode(self, recordingID):
+        categoryCode = ''
         with self.dbConnection.cursor() as cursor:
             cursor.execute('SELECT rerun_code FROM recording WHERE recording_id = %s;', (recordingID, ))
             row = cursor.fetchone()
-            if row is None:
-                return ''
-            else:
-                return row[0]
+            if row:
+                categoryCode = row[0]
+        self.dbConnection.commit()
+        return categoryCode
 
 
     def rokufyShowData(self, showData):
