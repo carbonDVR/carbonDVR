@@ -4,6 +4,8 @@ import sys, os, os.path
 import logging
 import psycopg2
 import pytz
+import tempfile
+import time
 
 import recorder
 import transcoder
@@ -17,6 +19,7 @@ class ConfigHolder:
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 
 def getMandatoryEnvVar(varName):
     logger = logging.getLogger(__name__)
@@ -37,6 +40,12 @@ if __name__ == '__main__':
     carbonDVRConfig.dbConnectString = getMandatoryEnvVar('CARBONDVR_DB_CONNECT_STRING')
     carbonDVRConfig.schema = getMandatoryEnvVar('CARBONDVR_DB_SCHEMA')
     carbonDVRConfig.webserverPort = getMandatoryEnvVar('CARBONDVR_WEBSERVER_PORT')
+    carbonDVRConfig.listingFetchTime = time.strptime(getMandatoryEnvVar('CARBONDVR_LISTING_FETCH_TIME'), '%H:%M:%S')
+    logger.info('Listing fetch time: %02d:%02d:00', carbonDVRConfig.listingFetchTime.tm_hour, carbonDVRConfig.listingFetchTime.tm_min)
+
+    fetchXTVDConfig = ConfigHolder()
+    fetchXTVDConfig.schedulesDirectUsername = getMandatoryEnvVar('SCHEDULES_DIRECT_USERNAME')
+    fetchXTVDConfig.schedulesDirectPassword = getMandatoryEnvVar('SCHEDULES_DIRECT_PASSWORD')
 
     recorderConfig = ConfigHolder()
     recorderConfig.hdhomerunBinary = getMandatoryEnvVar('RECORDER_HDHOMERUN_BINARY')
@@ -91,6 +100,15 @@ if __name__ == '__main__':
 
     cleanup = cleanup.Cleanup(dbConnection)
     scheduler.add_job(cleanup.cleanup, trigger=IntervalTrigger(minutes=60))
+
+    def fetchListings():
+        xtvdFile = tempfile.TemporaryFile()
+        fetchXTVD.fetchXTVDtoFile(fetchXTVDConfig.schedulesDirectUsername, fetchXTVDConfig.schedulesDirectPassword, xtvdFile)
+        dbInterface = parseXTVD.carbonDVRDatabase(dbConnection, carbonDVRConfig.schema)
+        parseXTVD.parseXTVD(xtvdFile, dbInterface)
+    fetchTrigger = CronTrigger(hour = carbonDVRConfig.listingFetchTime.tm_hour, minute = carbonDVRConfig.listingFetchTime.tm_min)
+#    scheduler.add_job(fetchListings, trigger=fetchTrigger, misfire_grace_time=3600)
+
 
     scheduler.start();
 
