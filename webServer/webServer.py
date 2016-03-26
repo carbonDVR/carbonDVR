@@ -85,7 +85,7 @@ def getRecording(recordingID):
 
 @webServerApp.route('/recordings/<recordingID>', methods=['DELETE'])
 def deleteRecording(recordingID):
-    return current_app.restServer.deleteRecorder(recordingID)
+    return current_app.restServer.deleteRecording(recordingID)
 
 @webServerApp.route('/recordings/<recordingID>/playbackPosition')
 def getPlaybackPosition(recordingID):
