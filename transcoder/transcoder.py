@@ -40,29 +40,23 @@ class Transcoder:
 
     def dbSelectRecordingsToTranscode(self):
         recordings = []
-        cursor = self.dbConnection.cursor()
-        cursor.execute("SELECT recording_id, filename FROM file_raw_video WHERE recording_id NOT IN (SELECT recording_id FROM file_transcoded_video);")
-        for row in cursor:
-            recordings.append({'recordingID':row[0], 'filename':row[1]})
-        cursor.close()
-        self.dbConnection.commit()
+        with self.dbConnection.cursor() as cursor:
+            cursor.execute("SELECT recording_id, filename FROM file_raw_video WHERE recording_id NOT IN (SELECT recording_id FROM file_transcoded_video);")
+            for row in cursor:
+                recordings.append({'recordingID':row[0], 'filename':row[1]})
         return recordings
 
     def dbGetDuration(self, recordingID):
-        cursor = self.dbConnection.cursor()
-        cursor.execute("SELECT duration FROM recording WHERE recording_id = %s;", (recordingID,))
-        row = cursor.fetchone()
-        cursor.close()
-        self.dbConnection.commit()
-        if row is None:
-            return datetime.timedelta(seconds=0)
-        return row[0]
+        with self.dbConnection.cursor() as cursor:
+            cursor.execute("SELECT duration FROM recording WHERE recording_id = %s;", (recordingID,))
+            row = cursor.fetchone()
+            if row is None:
+                return datetime.timedelta(seconds=0)
+            return row[0]
 
     def dbInsertTranscodedFileLocation(self, recordingID, filename, state):
-        cursor = self.dbConnection.cursor()
-        cursor.execute("INSERT INTO file_transcoded_video(recording_id, filename, state) VALUES (%s, %s, %s)", (recordingID, filename, state))
-        cursor.close()
-        self.dbConnection.commit()
+        with self.dbConnection.cursor() as cursor:
+            cursor.execute("INSERT INTO file_transcoded_video(recording_id, filename, state) VALUES (%s, %s, %s)", (recordingID, filename, state))
 
     def transcode(self, recordingID, sourceFile, destFile, logFile, duration):
         self.logger.info("Transcoding {} to {}".format(sourceFile, destFile))

@@ -98,19 +98,15 @@ class BifGen:
 
     def dbGetRecordingsToBif(self):
         recordings = []
-        cursor = self.dbConnection.cursor()
-        cursor.execute("SELECT recording_id, filename FROM file_transcoded_video WHERE state = %s AND recording_id NOT IN (SELECT recording_id FROM file_bif);", (0, ))
-        for row in cursor:
-            recordings.append({'recordingID':row[0], 'filename':row[1]})
-        cursor.close()
-        self.dbConnection.commit()
+        with self.dbConnection.cursor() as cursor:
+            cursor.execute("SELECT recording_id, filename FROM file_transcoded_video WHERE state = %s AND recording_id NOT IN (SELECT recording_id FROM file_bif);", (0, ))
+            for row in cursor:
+                recordings.append({'recordingID':row[0], 'filename':row[1]})
         return recordings
 
     def dbInsertBifFileLocation(self, recordingID, filename):
-        cursor = self.dbConnection.cursor()
-        cursor.execute("INSERT INTO file_bif(recording_id, filename) VALUES (%s, %s)", (recordingID, filename))
-        cursor.close()
-        self.dbConnection.commit()
+        with self.dbConnection.cursor() as cursor:
+          cursor.execute("INSERT INTO file_bif(recording_id, filename) VALUES (%s, %s)", (recordingID, filename))
 
     def clearImageDirectory(self):
         self.logger.info("Clearing image directory {}".format(self.imageDir))
