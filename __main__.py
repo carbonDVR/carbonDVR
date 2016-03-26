@@ -8,6 +8,7 @@ import pytz
 import recorder
 import transcoder
 import bifGen
+import cleanup
 import webServer
 
 class ConfigHolder:
@@ -86,11 +87,14 @@ if __name__ == '__main__':
     bifGen = bifGen.BifGen(dbConnection, bifGenConfig.imageCommand, bifGenConfig.imageDir, bifGenConfig.bifFilespec, bifGenConfig.frameInterval)
     scheduler.add_job(bifGen.bifRecordings, trigger=IntervalTrigger(seconds=60))
 
+    cleanup = cleanup.Cleanup(dbConnection)
+    scheduler.add_job(cleanup.cleanup, trigger=IntervalTrigger(minutes=60))
+
     scheduler.start();
+
 
     def scheduleRecordingsCallback():
         recorder.scheduleRecordings()
-
 
     webServer.webServerApp.restServer = webServer.RestServer(dbConnection, restConfig.genericSDPosterURL, restConfig.genericHDPosterURL, restConfig.restServerURL, restConfig.streamURL, restConfig.bifURL)
     webServer.webServerApp.uiServer = webServer.UIServer(dbConnection, uiConfig.uiServerURL, scheduleRecordingsCallback)
