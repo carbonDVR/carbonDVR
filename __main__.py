@@ -34,9 +34,11 @@ if __name__ == '__main__':
     logger = logging.getLogger(__name__)
 
     dbConnectString = getMandatoryEnvVar('DB_CONNECT_STRING')
-    hdhomerunBinary = getMandatoryEnvVar('HDHOMERUN_BINARY')
-    videoFilespec = getMandatoryEnvVar('VIDEO_FILESPEC')
-    logFilespec = getMandatoryEnvVar('VIDEO_LOG_FILESPEC')
+
+    recorderConfig = ConfigHolder()
+    recorderConfig.hdhomerunBinary = getMandatoryEnvVar('RECORDER_HDHOMERUN_BINARY')
+    recorderConfig.videoFilespec = getMandatoryEnvVar('RECORDER_VIDEO_FILESPEC')
+    recorderConfig.logFilespec = getMandatoryEnvVar('RECORDER_VIDEO_LOG_FILESPEC')
 
     transcoderConfig = ConfigHolder()
     transcoderConfig.lowCommand = getMandatoryEnvVar('TRANSCODER_COMMAND_LOW')
@@ -77,8 +79,8 @@ if __name__ == '__main__':
     recorderDBInterface = recorder.CarbonDVRDatabase(dbConnection)
     channels = recorderDBInterface.getChannels()
     tuners = recorderDBInterface.getTuners()
-    hdhomerun = recorder.HDHomeRunInterface(channels, tuners, hdhomerunBinary)
-    recorder = recorder.Recorder(scheduler, hdhomerun, recorderDBInterface, videoFilespec, logFilespec)
+    hdhomerun = recorder.HDHomeRunInterface(channels, tuners, recorderConfig.hdhomerunBinary)
+    recorder = recorder.Recorder(scheduler, hdhomerun, recorderDBInterface, recorderConfig.videoFilespec, recorderConfig.logFilespec)
 
     transcoder = transcoder.Transcoder(dbConnection, transcoderConfig.lowCommand, transcoderConfig.mediumCommand, transcoderConfig.highCommand,
         transcoderConfig.outputFilespec, transcoderConfig.logFilespec)
