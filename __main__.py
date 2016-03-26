@@ -33,7 +33,10 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format=FORMAT, datefmt='%Y-%m-%d %H:%M:%S')
     logger = logging.getLogger(__name__)
 
-    dbConnectString = getMandatoryEnvVar('DB_CONNECT_STRING')
+    carbonDVRConfig = ConfigHolder()
+    carbonDVRConfig.dbConnectString = getMandatoryEnvVar('CARBONDVR_DB_CONNECT_STRING')
+    carbonDVRConfig.schema = getMandatoryEnvVar('CARBONDVR_DB_SCHEMA')
+    carbonDVRConfig.webserverPort = getMandatoryEnvVar('CARBONDVR_WEBSERVER_PORT')
 
     recorderConfig = ConfigHolder()
     recorderConfig.hdhomerunBinary = getMandatoryEnvVar('RECORDER_HDHOMERUN_BINARY')
@@ -63,13 +66,10 @@ if __name__ == '__main__':
     restConfig.streamURL = getMandatoryEnvVar('RESTSERVER_STREAM_URL')
     restConfig.bifURL = getMandatoryEnvVar('RESTSERVER_BIF_URL')
 
-    dbConnection = psycopg2.connect(dbConnectString)
-
-    schema = os.environ.get('DB_SCHEMA')
-    if schema is not None:
-        logger.info('DB_SCHEMA=%s', schema)
+    dbConnection = psycopg2.connect(carbonDVRConfig.dbConnectString)
+    if carbonDVRConfig.schema is not None:
         with dbConnection.cursor() as cursor:
-            cursor.execute("SET SCHEMA %s", (schema, ))
+            cursor.execute("SET SCHEMA %s", (carbonDVRConfig.schema, ))
         dbConnection.commit()
 
     scheduler = BackgroundScheduler(timezone=pytz.utc)
@@ -100,6 +100,6 @@ if __name__ == '__main__':
 
     webServer.webServerApp.restServer = webServer.RestServer(dbConnection, restConfig.genericSDPosterURL, restConfig.genericHDPosterURL, restConfig.restServerURL, restConfig.streamURL, restConfig.bifURL)
     webServer.webServerApp.uiServer = webServer.UIServer(dbConnection, uiConfig.uiServerURL, scheduleRecordingsCallback)
-#    webServer.webServerApp.run(host='0.0.0.0',port=8085,debug=True)
-    webServer.webServerApp.run(host='0.0.0.0',port=8085)
+#    webServer.webServerApp.run(host='0.0.0.0',port=carbonDVRConfig.webserverPort, debug=True)
+    webServer.webServerApp.run(host='0.0.0.0',port=carbonDVRConfig.webserverPort)
 
