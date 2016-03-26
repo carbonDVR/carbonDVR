@@ -98,6 +98,7 @@ if __name__ == '__main__':
     def scheduleRecordingsCallback():
         recorder.scheduleRecordings()
 
+    logging.getLogger('werkzeug').setLevel(logging.WARNING)            # turn down the logging from werkzeug
     webServer.webServerApp.restServer = webServer.RestServer(dbConnection, restConfig.genericSDPosterURL, restConfig.genericHDPosterURL, restConfig.restServerURL, restConfig.streamURL, restConfig.bifURL)
     webServer.webServerApp.uiServer = webServer.UIServer(dbConnection, uiConfig.uiServerURL, scheduleRecordingsCallback)
 #    webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort), debug=True)
