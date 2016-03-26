@@ -2,11 +2,10 @@
 
 import psycopg2
 import logging
-import time
 import os
-import shutil
 import subprocess
 import tempfile
+import threading
 
 
 def getFiles(path):
@@ -28,12 +27,11 @@ def getFilesByExt(path, targetExt):
     return files
 
 
-# untested funcion to generate BIF files from image files
+# function to generate BIF files from image files
 # downloaded from: https://bitbucket.org/bcl/homevideo/src/tip/server/makebif.py
-# it would certainly be nice to not have to depend on biftool, esp since biftool doesn't allow you to specify destination file
 import struct
 import array
-def experimental_makeBIF( filename, directory, interval ):
+def makeBIF( filename, directory, interval ):
     """
     Build a .bif file for the Roku Player Tricks Mode
 
@@ -85,21 +83,17 @@ def experimental_makeBIF( filename, directory, interval ):
 
 class BifGen:
 
-    def __init__(self, dbConnection, imageCommand, bifCommand, workingDir, imageDir, bifFilespec, frameInterval):
+    def __init__(self, dbConnection, imageCommand, imageDir, bifFilespec, frameInterval):
         self.logger = logging.getLogger(__name__)
+        self.workingLock = threading.Lock()
         self.dbConnection = dbConnection
         self.ffmpegCommand = imageCommand
-        self.biftoolCommand = bifCommand
-        self.workingDir = workingDir
-        self.scratchDir = imageDir
+        self.imageDir = imageDir
         self.bifFilespec = bifFilespec
         self.frameInterval = frameInterval
-        self.isBusy = False
         # log configuration settings
         self.logger.info("Template ffmepg command: {}".format(self.ffmpegCommand))
-        self.logger.info("Template biftool command: {}".format(self.biftoolCommand))
-        self.logger.info("working directory: {}".format(self.workingDir))
-        self.logger.info("scratch directory: {}".format(self.scratchDir))
+        self.logger.info("image directory: {}".format(self.imageDir))
         self.logger.info("bif filespec: {}".format(self.bifFilespec))
         self.logger.info("frame interval: {}ms".format(self.frameInterval))
 
@@ -119,18 +113,13 @@ class BifGen:
         cursor.close()
         self.dbConnection.commit()
 
-    def clearWorkingDirectory(self):
-        self.logger.info("Clearing working directory {}".format(self.workingDir))
-        for file in getFiles(self.workingDir):
-            os.unlink(file)
-
-    def clearScratchDirectory(self):
-        self.logger.info("Clearing scratch directory {}".format(self.scratchDir))
-        for file in getFilesByExt(self.scratchDir, '.jpg'):
+    def clearImageDirectory(self):
+        self.logger.info("Clearing image directory {}".format(self.imageDir))
+        for file in getFilesByExt(self.imageDir, '.jpg'):
             os.unlink(file)
 
     def imageFile(self, fileNumber):
-        return os.path.join(self.scratchDir, '{:0>8}.jpg'.format(fileNumber))
+        return os.path.join(self.imageDir, '{:0>8}.jpg'.format(fileNumber))
 #
 # Notes on BIF process
 #
@@ -142,20 +131,15 @@ class BifGen:
 # After ffmpeg has generated the thumbnails, we have to renumber them.  When ffmpeg generates them, the files are numbered starting from 00000001, but
 # biftool wants the files to be numbered from 00000000
 #
-# biftool supports specifying a source, but does not support specifying a destination.  Output is simply dumped to the current working dir.
-#
 #
 
     def bifRecording(self, recording):
         recordingID = recording['recordingID']
         self.logger.info("Biffing recording {}".format(recordingID))
-        # prep
-        self.clearWorkingDirectory()
-        self.clearScratchDirectory()
-        os.chdir(self.workingDir)
         # generate thumbnails
+        self.clearImageDirectory()
         framesPerSecond = 1000 / self.frameInterval
-        cmd = self.ffmpegCommand.format(videoFile=recording['filename'], framesPerSecond=framesPerSecond, imageDir=self.scratchDir)
+        cmd = self.ffmpegCommand.format(videoFile=recording['filename'], framesPerSecond=framesPerSecond, imageDir=self.imageDir)
         self.logger.info("Running ffmpeg ({})".format(cmd))
         outfile = tempfile.TemporaryFile("w+")
         subprocess.call(cmd.split(), stdout=outfile, stderr=subprocess.STDOUT)
@@ -165,30 +149,17 @@ class BifGen:
         while os.path.isfile(self.imageFile(i+1)):
             os.rename(self.imageFile(i+1), self.imageFile(i))
             i = i + 1
-        # run biftool
-        cmd = self.biftoolCommand.format(frameInterval=self.frameInterval, imageDir=self.scratchDir)
-        self.logger.info("Running biftool ({})".format(cmd))
-        outfile = tempfile.TemporaryFile("w+")
-        subprocess.call(cmd.split(), stdout=outfile, stderr=subprocess.STDOUT)
-        # move bif file to correct location
-        bifDestination = self.bifFilespec.format(recordingID=recordingID)
-        self.logger.info("Relocating bif file to {}".format(bifDestination))
-        shutil.move(getFilesByExt(self.workingDir, '.bif')[0], bifDestination)
-        # try experimental BIF function
-        experimentalID = str(recordingID) + "experimental"
-        destFile = self.bifFilespec.format(recordingID=experimentalID)
-        experimental_makeBIF(destFile, self.scratchDir, self.frameInterval)
+        # generate BIF file
+        bifFile = self.bifFilespec.format(recordingID=recordingID)
+        makeBIF(bifFile, self.imageDir, self.frameInterval)
         # mark recording as "biffed"
-        self.dbInsertBifFileLocation(recordingID, bifDestination)
+        self.dbInsertBifFileLocation(recordingID, bifFile)
         # cleanup
-        self.clearScratchDirectory()
+        self.clearImageDirectory()
 
     def bifRecordings(self):
-        if self.isBusy:
-            return
-        self.isBusy = True
-        recordings = self.dbGetRecordingsToBif()
-        for recording in recordings[:1]:
-            self.bifRecording(recording)
-        self.isBusy = False
+        with self.workingLock:
+            recordings = self.dbGetRecordingsToBif()
+            for recording in recordings[:1]:
+                self.bifRecording(recording)
 

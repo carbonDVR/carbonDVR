@@ -7,6 +7,7 @@ import pytz
 
 import recorder
 import transcoder
+import bifGen
 import webServer
 
 class ConfigHolder:
@@ -43,6 +44,12 @@ if __name__ == '__main__':
     transcoderConfig.outputFilespec = getMandatoryEnvVar('TRANSCODER_VIDEO_FILESPEC')
     transcoderConfig.logFilespec = getMandatoryEnvVar('TRANSCODER_LOG_FILESPEC')
 
+    bifGenConfig = ConfigHolder()
+    bifGenConfig.imageCommand = getMandatoryEnvVar('BIFGEN_IMAGE_COMMAND')
+    bifGenConfig.imageDir = getMandatoryEnvVar('BIFGEN_IMAGE_DIR')
+    bifGenConfig.bifFilespec = getMandatoryEnvVar('BIFGEN_BIF_FILESPEC')
+    bifGenConfig.frameInterval = int(getMandatoryEnvVar('BIFGEN_FRAME_INTERVAL'))
+
     uiConfig = ConfigHolder()
     uiConfig.uiServerURL = getMandatoryEnvVar('UISERVER_UISERVER_URL')
 
@@ -75,6 +82,9 @@ if __name__ == '__main__':
     transcoder = transcoder.Transcoder(dbConnection, transcoderConfig.lowCommand, transcoderConfig.mediumCommand, transcoderConfig.highCommand,
         transcoderConfig.outputFilespec, transcoderConfig.logFilespec)
     scheduler.add_job(transcoder.transcodeRecordings, trigger=IntervalTrigger(seconds=60))
+
+    bifGen = bifGen.BifGen(dbConnection, bifGenConfig.imageCommand, bifGenConfig.imageDir, bifGenConfig.bifFilespec, bifGenConfig.frameInterval)
+    scheduler.add_job(bifGen.bifRecordings, trigger=IntervalTrigger(seconds=60))
 
     scheduler.start();
 
