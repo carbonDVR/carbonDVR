@@ -81,7 +81,7 @@ def getShowEpisodesArchive(showID):
 
 @webServerApp.route('/recordings/<recordingID>')
 def getRecording(recordingID):
-    return current_app.restServer.getRecording(recodingID)
+    return current_app.restServer.getRecording(recordingID)
 
 @webServerApp.route('/recordings/<recordingID>', methods=['DELETE'])
 def deleteRecording(recordingID):
