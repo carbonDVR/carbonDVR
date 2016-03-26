@@ -1,1 +1,1 @@
-import fetchXTVD
+from fetchXTVD.fetchXTVD import fetchXTVDtoFile

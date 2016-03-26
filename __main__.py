@@ -4,9 +4,10 @@ import sys, os, os.path
 import logging
 import psycopg2
 import pytz
-import tempfile
 import time
 
+import fetchXTVD
+import parseXTVD
 import recorder
 import transcoder
 import bifGen
@@ -40,12 +41,13 @@ if __name__ == '__main__':
     carbonDVRConfig.dbConnectString = getMandatoryEnvVar('CARBONDVR_DB_CONNECT_STRING')
     carbonDVRConfig.schema = getMandatoryEnvVar('CARBONDVR_DB_SCHEMA')
     carbonDVRConfig.webserverPort = getMandatoryEnvVar('CARBONDVR_WEBSERVER_PORT')
-    carbonDVRConfig.listingFetchTime = time.strptime(getMandatoryEnvVar('CARBONDVR_LISTING_FETCH_TIME'), '%H:%M:%S')
-    logger.info('Listing fetch time: %02d:%02d:00', carbonDVRConfig.listingFetchTime.tm_hour, carbonDVRConfig.listingFetchTime.tm_min)
+    carbonDVRConfig.listingsFetchTime = time.strptime(getMandatoryEnvVar('CARBONDVR_LISTINGS_FETCH_TIME'), '%H:%M:%S')
+    logger.info('Listing fetch time: %02d:%02d:00', carbonDVRConfig.listingsFetchTime.tm_hour, carbonDVRConfig.listingsFetchTime.tm_min)
 
     fetchXTVDConfig = ConfigHolder()
     fetchXTVDConfig.schedulesDirectUsername = getMandatoryEnvVar('SCHEDULES_DIRECT_USERNAME')
     fetchXTVDConfig.schedulesDirectPassword = getMandatoryEnvVar('SCHEDULES_DIRECT_PASSWORD')
+    fetchXTVDConfig.listingsFile = getMandatoryEnvVar('CARBONDVR_LISTINGS_FILE')
 
     recorderConfig = ConfigHolder()
     recorderConfig.hdhomerunBinary = getMandatoryEnvVar('RECORDER_HDHOMERUN_BINARY')
@@ -102,12 +104,11 @@ if __name__ == '__main__':
     scheduler.add_job(cleanup.cleanup, trigger=IntervalTrigger(minutes=60))
 
     def fetchListings():
-        xtvdFile = tempfile.TemporaryFile()
-        fetchXTVD.fetchXTVDtoFile(fetchXTVDConfig.schedulesDirectUsername, fetchXTVDConfig.schedulesDirectPassword, xtvdFile)
+        fetchXTVD.fetchXTVDtoFile(fetchXTVDConfig.schedulesDirectUsername, fetchXTVDConfig.schedulesDirectPassword, fetchXTVDConfig.listingsFile)
         dbInterface = parseXTVD.carbonDVRDatabase(dbConnection, carbonDVRConfig.schema)
-        parseXTVD.parseXTVD(xtvdFile, dbInterface)
-    fetchTrigger = CronTrigger(hour = carbonDVRConfig.listingFetchTime.tm_hour, minute = carbonDVRConfig.listingFetchTime.tm_min)
-#    scheduler.add_job(fetchListings, trigger=fetchTrigger, misfire_grace_time=3600)
+        parseXTVD.parseXTVD(fetchXTVDConfig.listingsFile, dbInterface)
+    fetchTrigger = CronTrigger(hour = carbonDVRConfig.listingsFetchTime.tm_hour, minute = carbonDVRConfig.listingsFetchTime.tm_min)
+    scheduler.add_job(fetchListings, trigger=fetchTrigger, misfire_grace_time=3600)
 
 
     scheduler.start();
