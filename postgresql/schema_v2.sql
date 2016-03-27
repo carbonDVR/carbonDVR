@@ -43,7 +43,7 @@ CREATE TABLE schedule (
   schedule_id    SERIAL PRIMARY KEY,
   channel_major  integer,
   channel_minor  integer,
-  start_time     timestamp,
+  start_time     timestamp with time zone,
   duration       interval,
   show_id        text,
   episode_id     text,
@@ -66,7 +66,7 @@ CREATE TABLE recording (
   recording_id   int4 PRIMARY KEY,
   show_id        text,
   episode_id     text,
-  date_recorded  timestamp,
+  date_recorded  timestamp with time zone,
   duration       interval,
   rerun_code     character(1),
   FOREIGN KEY (show_id, episode_id) REFERENCES episode(show_id, episode_id)
