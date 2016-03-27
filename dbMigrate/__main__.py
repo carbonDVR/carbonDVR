@@ -24,9 +24,17 @@ if __name__ == '__main__':
     fromDB = psycopg2.connect(args.fromDatabase)
     toDB = psycopg2.connect(args.toDatabase)
 
-    if args.fromSchema == args.toSchema:
-        logger.error('Cannot specify the same schema as both --from-schema and --to-schema.')
+    if args.fromDatabase == args.toDatabase and args.fromSchema == args.toSchema:
+        logger.error('Cannot specify the same database and schema as both "from" and "to".')
         sys.exit(1)
+
+    with fromDB:
+        with fromDB.cursor() as cursor:
+            cursor.execute("SET SCHEMA %s", (args.fromSchema, ))
+
+    with toDB:
+        with toDB.cursor() as cursor:
+            cursor.execute("SET SCHEMA %s", (args.toSchema, ))
 
     if args.fromVersion == '1.0' and args.toVersion == '2.0':
         logger.info('Migrating from version "%s" in schema "%s" to version "%s" in schema "%s"', args.fromVersion, args.fromSchema, args.toVersion, args.toSchema)

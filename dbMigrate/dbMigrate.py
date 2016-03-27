@@ -25,6 +25,18 @@ def extractPartCode(episodeID):
 def migrate1to2(fromDB, fromSchema, toDB, toSchema):
     logger = logging.getLogger(__name__)
 
+
+    nextUniqueID=None
+    with fromDB:
+        with fromDB.cursor() as cursor:
+            cursor.execute("SELECT nextval('uniqueid');", ())
+            if cursor:
+                nextUniqueID = cursor.fetchone()[0]
+    with toDB:
+        with toDB.cursor() as cursor:
+            cursor.execute("SELECT setval('uniqueid', %s, false);", (nextUniqueID, ))
+
+
     shows=[]
     with fromDB:
         with fromDB.cursor() as cursor:
