@@ -23,12 +23,12 @@ class carbonDVRDatabase:
                 cursor.execute("UPDATE show set show_type = %s, name = %s WHERE show_id = %s", (showType, showName, showID))
         return numRowsInserted
 
-    def insertEpisode(self, showID, episodeID, episodeTitle, episodeDescription):
+    def insertEpisode(self, showID, episodeID, episodeTitle, episodeDescription, partCode):
         numRowsInserted = 0
         with self.connection.cursor() as cursor:
             cursor.execute("SELECT count(*) FROM episode WHERE show_id = %s AND episode_id = %s", (showID, episodeID))
             if cursor.fetchone()[0] == 0:
-                cursor.execute("INSERT INTO episode(show_id, episode_id, title, description) VALUES (%s, %s, %s, %s)", (showID, episodeID, episodeTitle, episodeDescription))
+                cursor.execute("INSERT INTO episode(show_id, episode_id, title, description, part_code) VALUES (%s, %s, %s, %s, %s)", (showID, episodeID, episodeTitle, episodeDescription, partCode))
                 numRowsInserted += cursor.rowcount
         return numRowsInserted
 
@@ -119,11 +119,23 @@ def extractSchedules(xmlElementTree, stationMap):
     return schedules
 
 
+def extractPartCodes(xmlElementTree, stationMap):
+    partCodes = {}
+    for scheduleElement in xmlElementTree.getroot().findall(".//{urn:TMSWebServices}schedules/{urn:TMSWebServices}schedule"):
+        partElement = scheduleElement.find(".//{urn:TMSWebServices}part")
+        if partElement is not None:
+            partCode = '{}/{}'.format(partElement.attrib['number'], partElement.attrib['total'])
+            programID = scheduleElement.attrib['program']
+            partCodes[programID] = partCode
+    return partCodes
+
+
 def extractPrograms(xmlElementTree):
     programs = []
     for programElement in xmlElementTree.getroot().findall(".//{urn:TMSWebServices}programs/{urn:TMSWebServices}program"):
         programID = ProgramID(programElement.attrib['id'])
         program = Program()
+        program.programID = programElement.attrib['id']
         program.showID = programID.showID()
         program.showType = programID.showType()
         program.series = programElement.findtext("{urn:TMSWebServices}series", "")
@@ -134,6 +146,12 @@ def extractPrograms(xmlElementTree):
         program.episodeNumber = programElement.findtext("{urn:TMSWebServices}syndicatedEpisodeNumber", "")
         programs.append(program)
     return programs
+
+
+def addPartCodes(programs, partCodes):
+    for program in programs:
+        program.partCode = partCodes.get(program.programID)
+        yield program
 
 
 def extractSchedulesWithValidChannels(schedules, channelSet):
@@ -161,6 +179,8 @@ def parseXTVD(xtvdFile, db):
         logger.error('No schedules found.  Aborting.')
         return
 
+    partCodes = extractPartCodes(xmlElementTree, stations)
+
     programs = extractPrograms(xmlElementTree)
     if not programs:
         logger.error('No programs found.  Aborting.')
@@ -177,8 +197,8 @@ def parseXTVD(xtvdFile, db):
 
     logger.info('Inserting episodes')
     numEpisodesInserted = 0
-    for program in programs:
-        numEpisodesInserted += db.insertEpisode(program.showID, program.episodeID, program.episodeTitle, program.episodeDescription)
+    for program in addPartCodes(programs, partCodes):
+        numEpisodesInserted += db.insertEpisode(program.showID, program.episodeID, program.episodeTitle, program.episodeDescription, program.partCode)
     db.commit();
     logger.info('%d episodes inserted', numEpisodesInserted)
 

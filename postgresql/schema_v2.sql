@@ -19,6 +19,7 @@ CREATE TABLE episode (
   episode_id     text,
   title          text,
   description    text,
+  part_code      text,
   imageurl       text,
   PRIMARY KEY (show_id, episode_id),
   FOREIGN KEY (show_id) REFERENCES show(show_id)

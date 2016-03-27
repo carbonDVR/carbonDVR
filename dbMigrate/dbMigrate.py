@@ -1,6 +1,25 @@
 import logging
 import psycopg2
 import datetime
+import parse
+
+
+v1EpisodeIDParser = parse.compile('{:d}.{:d}/{:d}')
+
+def stripPartCode(episodeID):
+    p = v1EpisodeIDParser.parse(episodeID)
+    if p is None:
+        return episodeID
+    return str(p[0])
+
+
+def extractPartCode(episodeID):
+    p = v1EpisodeIDParser.parse(episodeID)
+    if p is None:
+        return None
+    if len(p.fixed) == 3:
+        return '{}/{}'.format(p[1] + 1, p[2])
+    return None
 
 
 def migrate1to2(fromDB, fromSchema, toDB, toSchema):
@@ -69,9 +88,10 @@ def migrate1to2(fromDB, fromSchema, toDB, toSchema):
             for row in cursor:
                 episode = {}
                 episode['show_id'] = row[0]
-                episode['episode_id'] = row[1]
+                episode['episode_id'] = stripPartCode(row[1])
                 episode['title'] = row[2]
                 episode['description'] = row[3]
+                episode['part_code'] = extractPartCode(row[1])
                 episode['imageurl'] = row[4]
                 episodes.append(episode)
     with toDB:
@@ -81,9 +101,9 @@ def migrate1to2(fromDB, fromSchema, toDB, toSchema):
                 query = 'SELECT show_id, episode_id FROM {toSchema}.episode WHERE show_id=%s AND episode_id=%s'.format(toSchema=toSchema)
                 cursor.execute(query, (episode['show_id'], episode['episode_id']))
                 if cursor.rowcount == 0:
-                    query = str('INSERT INTO {toSchema}.episode (show_id, episode_id, title, description, imageurl) '
-                                'VALUES (%s, %s, %s, %s, %s);').format(toSchema=toSchema)
-                    cursor.execute(query, (episode['show_id'], episode['episode_id'], episode['title'], episode['description'], episode['imageurl']))
+                    query = str('INSERT INTO {toSchema}.episode (show_id, episode_id, title, description, part_code, imageurl) '
+                                'VALUES (%s, %s, %s, %s, %s, %s);').format(toSchema=toSchema)
+                    cursor.execute(query, (episode['show_id'], episode['episode_id'], episode['title'], episode['description'], episode['part_code'], episode['imageurl']))
                     numInserts += cursor.rowcount
         logger.info('Episodes inserted: %d', numInserts)
 
@@ -125,7 +145,7 @@ def migrate1to2(fromDB, fromSchema, toDB, toSchema):
                 recording = {}
                 recording['recording_id'] = row[0]
                 recording['show_id'] = row[1]
-                recording['episode_id'] = row[2]
+                recording['episode_id'] = stripPartCode(row[2])
                 recording['date_recorded'] = row[3]
                 recording['duration'] = row[4]
                 recording['rerun_code'] = row[5]
