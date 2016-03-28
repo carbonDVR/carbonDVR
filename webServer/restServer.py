@@ -1,5 +1,6 @@
 #!/usr/bin/env python3.4
 
+import json
 import os
 import psycopg2
 from xml.sax import saxutils
@@ -172,6 +173,13 @@ class RestServer:
         self.dbConnection.commit()
         return categoryCode
 
+    def dbRemainingListingTime(self):
+        with self.dbConnection:
+            with self.dbConnection.cursor() as cursor:
+                cursor.execute('SELECT max(start_time) - now() FROM schedule;')
+                row = cursor.fetchone()
+                return row[0]
+
 
     def rokufyShowData(self, showData):
         rokuData = {}
@@ -282,4 +290,11 @@ class RestServer:
     def archiveRecording(self, recordingID):
         self.dbSetCategoryCode(recordingID, 'A')
         return str(), 200
+
+    def getAlarms(self):
+        alarmList = []
+        remainingListingTime = self.dbRemainingListingTime()
+        if remainingListingTime.days < 20:
+            alarmList.append('Only {} days of listings remaining'.format(remainingListingTime.days))
+        return alarmList
 
