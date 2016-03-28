@@ -65,13 +65,13 @@ class UIServer:
     def dbGetUpcomingRecordings(self):
         schedules = []
         query = str("SELECT DISTINCT ON (schedule.show_id, schedule.episode_id) "
-                    "schedule.schedule_id, schedule.start_time at time zone 'utc', schedule.channel_major, schedule.channel_minor,"
+                    "schedule.schedule_id, schedule.start_time, schedule.channel_major, schedule.channel_minor,"
                     "show.name, episode.episode_id, episode.title "
                     "FROM schedule "
                     "INNER JOIN subscription ON (schedule.show_id = subscription.show_id) "
                     "INNER JOIN show ON (schedule.show_id = show.show_id) "
                     "INNER JOIN episode ON (schedule.show_id = episode.show_id AND schedule.episode_id = episode.episode_id) "
-                    "WHERE schedule.start_time > now() at time zone 'utc' "
+                    "WHERE schedule.start_time > now() "
                     "AND (schedule.show_id, schedule.episode_id) NOT IN "
                         "(SELECT recorded_episodes_by_id.show_id, recorded_episodes_by_id.episode_id FROM recorded_episodes_by_id) "
                     "ORDER BY schedule.show_id, schedule.episode_id ")
