@@ -34,7 +34,7 @@ def migrate1to2(fromDB, fromSchema, toDB, toSchema):
                 nextUniqueID = cursor.fetchone()[0]
     with toDB:
         with toDB.cursor() as cursor:
-            cursor.execute("SELECT setval('uniqueid', %s, false);", (nextUniqueID, ))
+            cursor.execute("SELECT setval('uniqueid', %s, true);", (nextUniqueID, ))
 
 
     shows=[]
