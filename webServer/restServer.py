@@ -3,6 +3,7 @@
 import json
 import os
 import psycopg2
+import tzlocal
 from xml.sax import saxutils
 
 from psycopg2.extensions import register_type, UNICODE
@@ -131,7 +132,8 @@ class RestServer:
                 showName = row[1].encode('ascii', 'xmlcharrefreplace').decode('ascii')               # compensate for Python's inability to cope with unicode
                 episodeTitle = row[3].encode('ascii', 'xmlcharrefreplace').decode('ascii')           # compensate for Python's inability to cope with unicode
                 episodeDescription = row[4].encode('ascii', 'xmlcharrefreplace').decode('ascii')     # compensate for Python's inability to cope with unicode
-                recordingData = {'recordingID':row[0], 'showName':showName, 'imageURL':row[2], 'episodeTitle':episodeTitle, 'episodeDescription':episodeDescription, 'dateRecorded':row[5], 'duration':row[6], 'episodeNumber':row[7]}
+                dateRecorded = row[5].astimezone(tzlocal.get_localzone())
+                recordingData = {'recordingID':row[0], 'showName':showName, 'imageURL':row[2], 'episodeTitle':episodeTitle, 'episodeDescription':episodeDescription, 'dateRecorded':dateRecorder, 'duration':row[6], 'episodeNumber':row[7]}
         self.dbConnection.commit()
         return recordingData
 

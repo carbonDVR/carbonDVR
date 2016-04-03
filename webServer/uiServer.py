@@ -4,6 +4,7 @@ from flask import render_template
 import logging
 import os
 import psycopg2
+import tzlocal
 
 from psycopg2.extensions import register_type, UNICODE
 register_type(UNICODE)
@@ -37,7 +38,8 @@ class UIServer:
                 show = row[1].encode('ascii', 'xmlcharrefreplace').decode('ascii')           # compensate for Python's inability to cope with unicode
                 episodeNumber = row[2].encode('ascii', 'xmlcharrefreplace').decode('ascii')  # compensate for Python's inability to cope with unicode
                 episode = row[3].encode('ascii', 'xmlcharrefreplace').decode('ascii')        # compensate for Python's inability to cope with unicode
-                recordings.append(Bunch(recordingID=row[0], show=show, episode=episode, episodeNumber=episodeNumber, dateRecorded=row[4], duration=row[5]))
+                dateRecorded = row[4].astimezone(tzlocal.get_localzone())
+                recordings.append(Bunch(recordingID=row[0], show=show, episode=episode, episodeNumber=episodeNumber, dateRecorded=dateRecorded, duration=row[5]))
         self.dbConnection.commit()
         return recordings
 
@@ -57,7 +59,8 @@ class UIServer:
                 show = row[1].encode('ascii', 'xmlcharrefreplace').decode('ascii')           # compensate for Python's inability to cope with unicode
                 episodeNumber = row[2].encode('ascii', 'xmlcharrefreplace').decode('ascii')  # compensate for Python's inability to cope with unicode
                 episode = row[3].encode('ascii', 'xmlcharrefreplace').decode('ascii')        # compensate for Python's inability to cope with unicode
-                recordings.append(Bunch(recordingID=row[0], show=show, episodeNumber=episodeNumber, episode=episode, dateRecorded=row[4], duration=row[5]))
+                dateRecorded = row[4].astimezone(tzlocal.get_localzone())
+                recordings.append(Bunch(recordingID=row[0], show=show, episodeNumber=episodeNumber, episode=episode, dateRecorded=dateRecorded, duration=row[5]))
         self.dbConnection.commit()
         return recordings
 
@@ -78,11 +81,12 @@ class UIServer:
         with self.dbConnection.cursor() as cursor:
             cursor.execute(query)
             for row in cursor:
+                startTime = row[1].astimezone(tzlocal.get_localzone())
                 channel = '{}.{}'.format(row[2], row[3])
                 show = row[4].encode('ascii', 'xmlcharrefreplace').decode('ascii')           # compensate for Python's inability to cope with unicode
                 episodeNumber = row[5].encode('ascii', 'xmlcharrefreplace').decode('ascii')  # compensate for Python's inability to cope with unicode
                 episode = row[6].encode('ascii', 'xmlcharrefreplace').decode('ascii')        # compensate for Python's inability to cope with unicode
-                schedules.append(Bunch(scheduleID=row[0], startTime=row[1], channel=channel, show=show, episodeNumber=episodeNumber, episode=episode))
+                schedules.append(Bunch(scheduleID=row[0], startTime=startTime, channel=channel, show=show, episodeNumber=episodeNumber, episode=episode))
         self.dbConnection.commit()
         schedules.sort(key=lambda schedule: schedule.startTime)
         return schedules
@@ -135,7 +139,8 @@ class UIServer:
             for row in cursor:
                 showName = row[1].encode('ascii', 'xmlcharrefreplace').decode('ascii')     # compensate for Python's inability to cope with unicode
                 episodeName = row[2].encode('ascii', 'xmlcharrefreplace').decode('ascii')  # compensate for Python's inability to cope with unicode
-                recordingsWithoutFileRecords.append(Bunch(recordingID=row[0], show=showName, episode=episodeName, dateRecorded=row[3]))
+                dateRecorded = row[3].astimezone(tzlocal.get_localzone())
+                recordingsWithoutFileRecords.append(Bunch(recordingID=row[0], show=showName, episode=episodeName, dateRecorded=dateRecorded))
         query = str('SELECT recording_id, file_raw_video.filename, file_transcoded_video.filename, file_bif.filename '
                     'FROM file_raw_video '
                     'FULL JOIN file_transcoded_video USING (recording_id) '
@@ -187,7 +192,7 @@ class UIServer:
                         "VALUES ('test', %s, 'TrinTV Test Episode', 'This is a test episode for TrinTV', NULL);")
             cursor.execute(query, (uniqueID, ))
             query = str("INSERT INTO schedule (schedule_id, channel_major, channel_minor, start_time, duration, show_id, episode_id, rerun_code) "
-                        "VALUES (%s, '19', '1', now() at time zone 'utc' + '30 seconds', '2 minutes', 'test', %s, 'R');")
+                        "VALUES (%s, '19', '1', now() + '30 seconds', '2 minutes', 'test', %s, 'R');")
             cursor.execute(query, (uniqueID, uniqueID))
         self.dbConnection.commit()
 

@@ -54,12 +54,12 @@ class CarbonDVRDatabase:
         schedules = []
         with self.connection.cursor() as cursor:
             query = str("SELECT DISTINCT ON (schedule.show_id, schedule.episode_id) "
-                        "schedule.schedule_id, schedule.channel_major, schedule.channel_minor, schedule.start_time at time zone 'utc', "
+                        "schedule.schedule_id, schedule.channel_major, schedule.channel_minor, schedule.start_time, "
                         "schedule.duration, schedule.show_id, schedule.episode_id, schedule.rerun_code "
                         "FROM schedule "
                         "INNER JOIN subscription ON (schedule.show_id = subscription.show_id) "
-                        "WHERE schedule.start_time > now() at time zone 'utc' "
-                        "AND schedule.start_time < now() at time zone 'utc' + %s "
+                        "WHERE schedule.start_time > now() "
+                        "AND schedule.start_time < now() + %s "
                         "AND (schedule.show_id, schedule.episode_id) NOT IN "
                             "(SELECT recorded_episodes_by_id.show_id, recorded_episodes_by_id.episode_id FROM recorded_episodes_by_id) "
                         "ORDER BY schedule.show_id, schedule.episode_id;");

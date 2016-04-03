@@ -79,9 +79,12 @@ if __name__ == '__main__':
 
     dbConnection = psycopg2.connect(carbonDVRConfig.dbConnectString)
     if carbonDVRConfig.schema is not None:
+        with dbConnection:
+            with dbConnection.cursor() as cursor:
+                cursor.execute("SET SCHEMA %s", (carbonDVRConfig.schema, ))
+    with dbConnection:
         with dbConnection.cursor() as cursor:
-            cursor.execute("SET SCHEMA %s", (carbonDVRConfig.schema, ))
-        dbConnection.commit()
+            cursor.execute("SET TIMEZONE TO UTC;")
 
     scheduler = BackgroundScheduler(timezone=pytz.utc)
     logging.getLogger('apscheduler').setLevel(logging.WARNING)            # turn down the logging from apscheduler
