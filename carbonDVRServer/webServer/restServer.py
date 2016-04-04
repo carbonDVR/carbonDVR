@@ -131,7 +131,7 @@ class RestServer:
                 episodeTitle = row[3].encode('ascii', 'xmlcharrefreplace').decode('ascii')           # compensate for Python's inability to cope with unicode
                 episodeDescription = row[4].encode('ascii', 'xmlcharrefreplace').decode('ascii')     # compensate for Python's inability to cope with unicode
                 dateRecorded = row[5].astimezone(tzlocal.get_localzone())
-                recordingData = {'recordingID':row[0], 'showName':showName, 'imageURL':row[2], 'episodeTitle':episodeTitle, 'episodeDescription':episodeDescription, 'dateRecorded':dateRecorder, 'duration':row[6], 'episodeNumber':row[7]}
+                recordingData = {'recordingID':row[0], 'showName':showName, 'imageURL':row[2], 'episodeTitle':episodeTitle, 'episodeDescription':episodeDescription, 'dateRecorded':dateRecorded, 'duration':row[6], 'episodeNumber':row[7]}
         self.dbConnection.commit()
         return recordingData
 
