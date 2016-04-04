@@ -65,10 +65,8 @@ def stripLeadingArticles(title):
 
 
 class RestServer:
-    def __init__(self, dbConnection, genericSDPosterURL, genericHDPosterURL, restServerURL, streamURL, bifURL):
+    def __init__(self, dbConnection, restServerURL, streamURL, bifURL):
         self.dbConnection = dbConnection
-        self.genericSDPosterURL = genericSDPosterURL
-        self.genericHDPosterURL = genericHDPosterURL
         self.restServerURL = restServerURL
         self.streamURL = streamURL
         self.bifURL = bifURL
@@ -187,10 +185,8 @@ class RestServer:
         rokuData = {}
         rokuData['title'] = showData['name']
         rokuData['description'] = ' '
-        rokuData['sd_img'] = self.genericSDPosterURL
-        rokuData['hd_img'] = showData['imageURL']
-        if rokuData['hd_img'] is None:
-            rokuData['hd_img'] = self.genericHDPosterURL
+        if showData['imageURL'] is not None:
+            rokuData['hd_img'] = showData['imageURL']
         rokuData['new_episode_list_url'] = self.makeURL('/shows/{}/episodes/new'.format(showData['showID']))
         rokuData['rerun_episode_list_url'] = self.makeURL('/shows/{}/episodes/rerun'.format(showData['showID']))
         rokuData['archived_episode_list_url'] = self.makeURL('/shows/{}/episodes/archive'.format(showData['showID']))
@@ -202,12 +198,10 @@ class RestServer:
         rokuData['short_description_1'] = '{epNumber}: {epTitle}'.format(epNumber=episodeData['episodeNumber'], epTitle=episodeData['episodeTitle'])
 #        rokuData['short_description_2'] = ' '
         rokuData['description'] = episodeData['episodeDescription']
-        rokuData['sd_img'] = self.genericSDPosterURL
-        rokuData['hd_img'] = episodeData['imageURL']
-        if rokuData['hd_img'] is None:
+        if episodeData['imageURL'] is not None:
+            rokuData['hd_img'] = episodeData['imageURL']
+        elif episodeData['showImageURL'] is not None:
             rokuData['hd_img'] = episodeData['showImageURL']
-        if rokuData['hd_img'] is None:
-            rokuData['hd_img'] = self.genericHDPosterURL
         rokuData['springboard_url'] = self.makeURL('/recordings/{}'.format(episodeData['recordingID']))
         return rokuData
 
@@ -216,10 +210,8 @@ class RestServer:
         springboard = {}
         springboard['title'] = recordingData['showName']
         springboard['description'] = recordingData['episodeDescription']
-        springboard['sd_img'] = self.genericSDPosterURL
-        springboard['hd_img'] = recordingData['imageURL']
-        if springboard['hd_img'] is None:
-            springboard['hd_img'] = self.genericHDPosterURL
+        if recordingData['imageURL'] is not None:
+            springboard['hd_img'] = recordingData['imageURL']
         springboard['hd_bif_url'] = self.bifURL.format(recordingID = recordingData['recordingID'])
         springboard['date_recorded'] = formatTime(recordingData['dateRecorded'])
         springboard['length'] = recordingData['duration'].total_seconds()

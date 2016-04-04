@@ -71,8 +71,6 @@ if __name__ == '__main__':
     uiConfig.uiServerURL = getMandatoryEnvVar('UISERVER_UISERVER_URL')
 
     restConfig = ConfigHolder()
-    restConfig.genericSDPosterURL = getMandatoryEnvVar('RESTSERVER_GENERIC_SD_POSTER_URL')
-    restConfig.genericHDPosterURL = getMandatoryEnvVar('RESTSERVER_GENERIC_HD_POSTER_URL')
     restConfig.restServerURL = getMandatoryEnvVar('RESTSERVER_RESTSERVER_URL')
     restConfig.streamURL = getMandatoryEnvVar('RESTSERVER_STREAM_URL')
     restConfig.bifURL = getMandatoryEnvVar('RESTSERVER_BIF_URL')
@@ -121,7 +119,7 @@ if __name__ == '__main__':
         recorder.scheduleRecordings()
 
     logging.getLogger('werkzeug').setLevel(logging.WARNING)            # turn down the logging from werkzeug
-    webServer.webServerApp.restServer = webServer.RestServer(dbConnection, restConfig.genericSDPosterURL, restConfig.genericHDPosterURL, restConfig.restServerURL, restConfig.streamURL, restConfig.bifURL)
+    webServer.webServerApp.restServer = webServer.RestServer(dbConnection, restConfig.restServerURL, restConfig.streamURL, restConfig.bifURL)
     webServer.webServerApp.uiServer = webServer.UIServer(dbConnection, uiConfig.uiServerURL, scheduleRecordingsCallback)
 #    webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort), debug=True)
     webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort))
