@@ -2,6 +2,6 @@ title=CarbonDVR v1.0.5
 subtitle=CarbonDVR
 major_version=1
 minor_version=0
-build_version=5
+build_version=6
 mm_icon_focus_hd=pkg:/images/carbonDVR_336x210.png
 mm_icon_side_hd=pkg:/images/carbonDVR_108x69.png
