@@ -4,6 +4,7 @@ language: python
 python:
   - "3.4"
 
+install: pip install -r carbonDVRServer/requirements.txt
 script: python -m unittest discover carbonDVRServer
 
 
