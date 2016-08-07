@@ -1,5 +1,6 @@
 #!/usr/bin/env python3.4
 
+import datetime
 import json
 import os
 import psycopg2
@@ -288,7 +289,9 @@ class RestServer:
     def getAlarms(self):
         alarmList = []
         remainingListingTime = self.dbRemainingListingTime()
-        if remainingListingTime.days < 20:
+        if remainingListingTime.days < 10:
             alarmList.append('Only {} days of listings remaining'.format(remainingListingTime.days))
+        if not alarmList and datetime.datetime.now().date().day == 1:
+            alarmList.append('Regularly scheduled test alarm (no actual alarms)')
         return alarmList
 
