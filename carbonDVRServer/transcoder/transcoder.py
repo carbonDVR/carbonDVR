@@ -57,9 +57,9 @@ class Transcoder:
         self.dbConnection.commit()
         return duration
 
-    def dbInsertTranscodedFileLocation(self, recordingID, filename, state):
+    def dbInsertTranscodedFileLocation(self, recordingID, locationID, filename, state):
         with self.dbConnection.cursor() as cursor:
-            cursor.execute("INSERT INTO file_transcoded_video(recording_id, filename, state) VALUES (%s, %s, %s)", (recordingID, filename, state))
+            cursor.execute("INSERT INTO file_transcoded_video(recording_id, location_id, filename, state) VALUES (%s, %s, %s, %s)", (recordingID, locationID, filename, state))
         self.dbConnection.commit()
 
     def transcode(self, recordingID, sourceFile, destFile, logFile, duration):
@@ -89,13 +89,14 @@ class Transcoder:
         recordings = self.dbSelectRecordingsToTranscode()
         for recording in recordings[:1]:
             recordingID = recording['recordingID']
+            locationID = 1
             srcFile = recording['filename']
             destFile = self.transcodedVideoFilespec.format(recordingID=recordingID)
             logFile = self.logFilespec.format(recordingID=recordingID)
             duration = self.dbGetDuration(recordingID)
             if self.transcode(recordingID, srcFile, destFile, logFile, duration):
                 self.logger.info("Transcode successful")
-                self.dbInsertTranscodedFileLocation(recordingID, destFile, 0)
+                self.dbInsertTranscodedFileLocation(recordingID, locationID, destFile, 0)
             else:
                 self.logger.info("Transcode failed")
                 self.dbInsertTranscodedFileLocation(recordingID, destFile, 1)

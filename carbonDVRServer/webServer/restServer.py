@@ -66,11 +66,10 @@ def stripLeadingArticles(title):
 
 
 class RestServer:
-    def __init__(self, dbConnection, restServerURL, streamURL, bifURL):
+    def __init__(self, dbConnection, fileLocations, restServerURL):
         self.dbConnection = dbConnection
+        self.fileLocations = fileLocations
         self.restServerURL = restServerURL
-        self.streamURL = streamURL
-        self.bifURL = bifURL
 
     def makeURL(self, endpoint):
         return self.restServerURL + endpoint
@@ -135,6 +134,28 @@ class RestServer:
                 recordingData = {'recordingID':row[0], 'showName':showName, 'imageURL':row[2], 'episodeTitle':episodeTitle, 'episodeDescription':episodeDescription, 'dateRecorded':dateRecorded, 'duration':row[6], 'episodeNumber':row[7]}
         self.dbConnection.commit()
         return recordingData
+
+
+    def dbGetTranscodedVideoLocationID(self, recordingID):
+        locationID = 0
+        with self.dbConnection.cursor() as cursor:
+            cursor.execute('SELECT location_id FROM file_transcoded_video WHERE recording_id = %s;', (recordingID, ))
+            row = cursor.fetchone()
+            if row:
+                locationID = row[0]
+        self.dbConnection.commit()
+        return locationID
+
+
+    def dbGetBifLocationID(self, recordingID):
+        locationID = 0
+        with self.dbConnection.cursor() as cursor:
+            cursor.execute('SELECT location_id FROM file_bif WHERE recording_id = %s;', (recordingID, ))
+            row = cursor.fetchone()
+            if row:
+                locationID = row[0]
+        self.dbConnection.commit()
+        return locationID
 
 
     def dbDeleteRecording(self, recordingID):
@@ -213,7 +234,7 @@ class RestServer:
         springboard['description'] = recordingData['episodeDescription']
         if recordingData['imageURL'] is not None:
             springboard['hd_img'] = recordingData['imageURL']
-        springboard['hd_bif_url'] = self.bifURL.format(recordingID = recordingData['recordingID'])
+        springboard['hd_bif_url'] = recordingData['bifURL']
         springboard['date_recorded'] = formatTime(recordingData['dateRecorded'])
         springboard['length'] = recordingData['duration'].total_seconds()
         springboard['trintv_episode_number'] = '{epNumber}: {epTitle}'.format(epNumber=recordingData['episodeNumber'], epTitle=recordingData['episodeTitle'])
@@ -226,7 +247,7 @@ class RestServer:
         springboard['stream'] = { 'format' : 'mp4',
                                   'quality' : 'HD',
                                   'bitrate' : 1000,
-                                  'url' : self.streamURL.format(recordingID = recordingData['recordingID'])
+                                  'url' : recordingData['transcodedVideoURL']
                                 }
         return springboard
 
@@ -261,6 +282,10 @@ class RestServer:
 
     def getRecording(self, recordingID):
         recordingData = self.dbGetRecordingData(recordingID)
+        transcodedVideoLocationID = self.dbGetTranscodedVideoLocationID(recordingID)
+        recordingData['transcodedVideoURL'] = self.fileLocations.getTranscodedVideoURL(locationID = transcodedVideoLocationID, recordingID = recordingID)
+        bifLocationID = self.dbGetBifLocationID(recordingID)
+        recordingData['bifURL'] = self.fileLocations.getBifURL(locationID = bifLocationID, recordingID = recordingID)
         rokuData = self.rokufyRecordingData(recordingData)
         return listToRokuXml('springboard', 'show', [rokuData])
 

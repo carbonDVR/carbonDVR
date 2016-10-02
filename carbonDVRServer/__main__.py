@@ -7,6 +7,7 @@ import pytz
 import time
 
 import fetchXTVD
+import fileLocations
 import parseXTVD
 import recorder
 import transcoder
@@ -42,6 +43,7 @@ if __name__ == '__main__':
     carbonDVRConfig.schema = getMandatoryEnvVar('CARBONDVR_DB_SCHEMA')
     carbonDVRConfig.webserverPort = getMandatoryEnvVar('CARBONDVR_WEBSERVER_PORT')
     carbonDVRConfig.listingsFetchTime = time.strptime(getMandatoryEnvVar('CARBONDVR_LISTINGS_FETCH_TIME'), '%H:%M:%S')
+    carbonDVRConfig.fileLocations = fileLocations.FileLocations(getMandatoryEnvVar('CARBONDVR_FILE_LOCATIONS'))
     logger.info('Listing fetch time: %02d:%02d:00', carbonDVRConfig.listingsFetchTime.tm_hour, carbonDVRConfig.listingsFetchTime.tm_min)
 
     fetchXTVDConfig = ConfigHolder()
@@ -72,8 +74,6 @@ if __name__ == '__main__':
 
     restConfig = ConfigHolder()
     restConfig.restServerURL = getMandatoryEnvVar('RESTSERVER_RESTSERVER_URL')
-    restConfig.streamURL = getMandatoryEnvVar('RESTSERVER_STREAM_URL')
-    restConfig.bifURL = getMandatoryEnvVar('RESTSERVER_BIF_URL')
 
     dbConnection = psycopg2.connect(carbonDVRConfig.dbConnectString)
     if carbonDVRConfig.schema is not None:
@@ -119,7 +119,7 @@ if __name__ == '__main__':
         recorder.scheduleRecordings()
 
     logging.getLogger('werkzeug').setLevel(logging.WARNING)            # turn down the logging from werkzeug
-    webServer.webServerApp.restServer = webServer.RestServer(dbConnection, restConfig.restServerURL, restConfig.streamURL, restConfig.bifURL)
+    webServer.webServerApp.restServer = webServer.RestServer(dbConnection, carbonDVRConfig.fileLocations, restConfig.restServerURL)
     webServer.webServerApp.uiServer = webServer.UIServer(dbConnection, uiConfig.uiServerURL, scheduleRecordingsCallback)
 #    webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort), debug=True)
     webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort))

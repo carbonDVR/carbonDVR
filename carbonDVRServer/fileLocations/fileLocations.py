@@ -26,7 +26,7 @@ class FileLocations:
         except:
             return ''
 
-    def getStreamURL(self, locationID, recordingID):
+    def getTranscodedVideoURL(self, locationID, recordingID):
         try:
             for location in self.fileLocations['transcodedVideo']:
                 if location['id'] == locationID:

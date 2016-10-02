@@ -105,9 +105,9 @@ class BifGen:
         self.dbConnection.commit()
         return recordings
 
-    def dbInsertBifFileLocation(self, recordingID, filename):
+    def dbInsertBifFileLocation(self, recordingID, locationID, filename):
         with self.dbConnection.cursor() as cursor:
-            cursor.execute("INSERT INTO file_bif(recording_id, filename) VALUES (%s, %s)", (recordingID, filename))
+            cursor.execute("INSERT INTO file_bif(recording_id, location_id, filename) VALUES (%s, %s, %s)", (recordingID, locationID, filename))
         self.dbConnection.commit()
 
     def clearImageDirectory(self):
@@ -147,11 +147,12 @@ class BifGen:
             os.rename(self.imageFile(i+1), self.imageFile(i))
             i = i + 1
         # generate BIF file
+        locationID = 1
         bifFile = self.bifFilespec.format(recordingID=recordingID)
         self.logger.info("Generating BIF file {}".format(bifFile))
         makeBIF(bifFile, self.imageDir, self.frameInterval)
         # mark recording as "biffed"
-        self.dbInsertBifFileLocation(recordingID, bifFile)
+        self.dbInsertBifFileLocation(recordingID, locationID, bifFile)
         # cleanup
         self.clearImageDirectory()
         self.logger.info("BIF generation complete")
