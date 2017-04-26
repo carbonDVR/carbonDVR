@@ -52,10 +52,14 @@ def listToRokuXml(listTag, itemTag, l):
 
 def formatTime(t):
     # the options in strftime are too limited to produce the output I'm looking for
+    dayOfWeek = t.strftime("%a")
+    monthName = t.strftime("%b")
     dayOfMonth = t.strftime('%d').lstrip('0')
+    year = t.strftime("%Y")
     hour = t.strftime('%I').lstrip('0')
+    minute = t.strftime('%M')
     ampm = t.strftime('%p').lower()
-    return '{date1} {dayOfMonth} {hour}:{min}{ampm}'.format(date1=t.strftime('%a, %b'), dayOfMonth=dayOfMonth, hour=hour, min=t.strftime('%M'), ampm=ampm)
+    return '{dayOfWeek}, {monthName} {dayOfMonth}, {year} {hour}:{minute}{ampm}'.format(dayOfWeek=dayOfWeek, monthName=monthName, dayOfMonth=dayOfMonth, year=year, hour=hour, minute=minute, ampm=ampm)
 
 
 def stripLeadingArticles(title):

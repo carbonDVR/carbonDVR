@@ -13,7 +13,7 @@
   </TR>
 {% for recording in recordings %}
   <TR>
-    <TD class='flush_right'>{{recording.dateRecorded.strftime('%a, %b %d %I:%M')}}</TD>
+    <TD class='flush_right'>{{recording.dateRecorded.strftime('%a, %b %d, %Y %I:%M')}}</TD>
     <TD class='flush_left'>{{recording.dateRecorded.strftime('%p')}}</TD>
     <TD class="left">{{recording.show}}</TD>
     <TD class="left">E{{recording.episodeNumber}}: {{recording.episode}}</TD>
