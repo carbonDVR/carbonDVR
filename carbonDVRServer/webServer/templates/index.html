@@ -4,13 +4,15 @@
 
 {% block body %}
 <P>
-<A HREF="{{url_for('getAllRecordings')}}">Recorded Shows</A>
-<P>
 <A HREF="{{url_for('getUpcomingRecordings')}}">Upcoming Recordings</A>
 <P>
 <A HREF="{{url_for('getRecentRecordings')}}">Recent Recordings</A>
 <P>
 <A HREF="{{url_for('getShowList')}}">Shows</A>
+<P>
+<A HREF="{{url_for('getRecordingsByDate')}}">Recordings by Date</A>
+<P>
+<A HREF="{{url_for('getRecordingsByShow')}}">Recordings by Show</A>
 <P>
 <BR>
 <BR>

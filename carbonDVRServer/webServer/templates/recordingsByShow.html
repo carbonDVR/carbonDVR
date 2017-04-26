@@ -1,0 +1,33 @@
+{% extends "base_template.html" %}
+{% block htmlTitle %}Recordings by Show{% endblock %}
+{% block title %}Recordings by Show{% endblock %}
+
+{% block body %}
+{% for showData in showList %}
+<P>
+<DIV style="border: 1px solid black; padding-left: 1em; padding-top: 1em;">
+<SPAN style="font-size: 150%">{{showData.name}}</SPAN><BR>
+Number of recordings: {{showData.numRecordings}}<BR>
+<TABLE class="report" style="border: none">
+  <TR>
+    <TH>Show</TH>
+    <TH>Episode</TH>
+    <TH>ID</TH>
+    <TH colspan=2 class='right'>Date Recorded</TH>
+    <TH class='right'>Duration</TH>
+  </TR>
+{% for recording in recordingsByShow[showData] %}
+  <TR>
+    <TD class="left">{{recording.show}}</TD>
+    <TD class="left">E{{recording.episodeNumber}}: {{recording.episode}}</TD>
+    <TD>{{recording.recordingID}}</TD>
+    <TD class='flush_right'>{{recording.dateRecorded.strftime('%a, %b %d, %Y %I:%M')}}</TD>
+    <TD class='flush_left'>{{recording.dateRecorded.strftime('%p')}}</TD>
+    <TD class="right">{{recording.duration}}</TD>
+  </TR>
+{% endfor %}
+</TABLE>
+</DIV>
+{% endfor %}
+{% endblock %}
+

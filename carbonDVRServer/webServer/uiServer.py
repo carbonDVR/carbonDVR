@@ -201,9 +201,9 @@ class UIServer:
         return render_template('index.html')
 
 
-    def getAllRecordings(self):
+    def getRecordingsByDate(self):
         recordings = self.dbGetAllRecordings()
-        return render_template('allRecordings.html', recordings=recordings)
+        return render_template('recordingsByDate.html', recordings=recordings)
 
 
     def getRecentRecordings(self):
@@ -238,4 +238,18 @@ class UIServer:
     def scheduleTestRecording(self):
         self.dbScheduleTestRecording()
         self.scheduleRecordingsCallback()
+
+
+    def getRecordingsByShow(self):
+        allRecordings = self.dbGetAllRecordings()
+        showList = []
+        recordingsByShow = {}
+        for showName in set([x.show for x in allRecordings]):
+          recordings = [x for x in allRecordings if x.show == showName]
+          showData = Bunch(name=showName, numRecordings=len(recordings))
+          showList.append(showData)
+          recordingsByShow[showData] = recordings
+        showList = sorted(showList, key=lambda x: x.name)
+        return render_template('recordingsByShow.html', showList=showList, recordingsByShow=recordingsByShow)
+
 

@@ -17,9 +17,9 @@ webServerApp = flask.Flask(__name__)
 def getIndex():
     return flask.current_app.uiServer.getIndex()
 
-@webServerApp.route('/recordings')
-def getAllRecordings():
-    return flask.current_app.uiServer.getAllRecordings()
+@webServerApp.route('/recordingsByDate')
+def getRecordingsByDate():
+    return flask.current_app.uiServer.getRecordingsByDate()
 
 @webServerApp.route('/recentRecordings')
 def getRecentRecordings():
@@ -52,6 +52,9 @@ def scheduleTestRecording():
     flask.current_app.uiServer.scheduleTestRecording()
     return flask.redirect(flask.url_for('getUpcomingRecordings'))
 
+@webServerApp.route('/recordingsByShow')
+def getRecordingsByShow():
+    return flask.current_app.uiServer.getRecordingsByShow()
 
 
 
