@@ -99,6 +99,6 @@ class Transcoder:
                 self.dbInsertTranscodedFileLocation(recordingID, locationID, destFile, 0)
             else:
                 self.logger.info("Transcode failed")
-                self.dbInsertTranscodedFileLocation(recordingID, destFile, 1)
+                self.dbInsertTranscodedFileLocation(recordingID, locationID, destFile, 1)
         self.isTranscoding = False
 
