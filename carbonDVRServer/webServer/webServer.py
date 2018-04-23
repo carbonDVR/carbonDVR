@@ -56,6 +56,15 @@ def scheduleTestRecording():
 def getRecordingsByShow():
     return flask.current_app.uiServer.getRecordingsByShow()
 
+@webServerApp.route('/transcodingFailures')
+def getTranscodingFailures():
+    return flask.current_app.uiServer.getTranscodingFailures()
+
+@webServerApp.route('/retryTranscode/<recordingID>')
+def retryTranscode(recordingID):
+    flask.current_app.uiServer.retryTranscode(recordingID)
+    return flask.redirect(flask.url_for('getTranscodingFailures'))
+
 
 
 #

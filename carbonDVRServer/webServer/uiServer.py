@@ -163,6 +163,26 @@ class UIServer:
         return Bunch(recordingsWithoutFileRecords=recordingsWithoutFileRecords, fileRecordsWithoutRecordings=fileRecordsWithoutRecordings, rawVideoFilesThatCanBeDeleted=rawVideoFilesThatCanBeDeleted)
 
 
+    def dbGetTranscodingFailures(self):
+        recordings = []
+        query = str("SELECT recording.recording_id, show.name, episode.episode_id, episode.title, recording.date_recorded "
+                    "FROM recording "
+                    'JOIN show USING (show_id) '
+                    'JOIN episode USING (show_id, episode_id) '
+                    "WHERE recording.recording_id IN (SELECT recording_id FROM file_transcoded_video WHERE state = 1) "
+                    "ORDER BY date_recorded DESC;")
+        with self.dbConnection.cursor() as cursor:
+            cursor.execute(query)
+            for row in cursor:
+                show = row[1].encode('ascii', 'xmlcharrefreplace').decode('ascii')           # compensate for Python's inability to cope with unicode
+                episodeNumber = row[2].encode('ascii', 'xmlcharrefreplace').decode('ascii')  # compensate for Python's inability to cope with unicode
+                episode = row[3].encode('ascii', 'xmlcharrefreplace').decode('ascii')        # compensate for Python's inability to cope with unicode
+                dateRecorded = row[4].astimezone(tzlocal.get_localzone())
+                recordings.append(Bunch(recordingID=row[0], show=show, episode=episode, episodeNumber=episodeNumber, dateRecorded=dateRecorded))
+        self.dbConnection.commit()
+        return recordings
+
+
     def dbGetNextScheduleID(self):
         scheduleID = None
         with self.dbConnection.cursor() as cursor:
@@ -194,6 +214,13 @@ class UIServer:
             query = str("INSERT INTO schedule (schedule_id, channel_major, channel_minor, start_time, duration, show_id, episode_id, rerun_code) "
                         "VALUES (%s, '19', '1', now() + '30 seconds', '2 minutes', 'test', %s, 'R');")
             cursor.execute(query, (uniqueID, uniqueID))
+        self.dbConnection.commit()
+
+
+    def dbDeleteFailedTranscode(self, recordingID):
+        with self.dbConnection.cursor() as cursor:
+            query = str("DELETE FROM file_transcoded_video WHERE recording_id = %s AND state = 1;")
+            cursor.execute(query, (recordingID, ))
         self.dbConnection.commit()
 
 
@@ -252,4 +279,9 @@ class UIServer:
         showList = sorted(showList, key=lambda x: x.name)
         return render_template('recordingsByShow.html', showList=showList, recordingsByShow=recordingsByShow)
 
+    def getTranscodingFailures(self):
+        transcodingFailures = self.dbGetTranscodingFailures()
+        return render_template('transcodingFailures.html', recordings=transcodingFailures)
 
+    def retryTranscode(self, recordingID):
+        self.dbDeleteFailedTranscode(recordingID)
