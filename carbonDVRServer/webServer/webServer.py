@@ -65,6 +65,10 @@ def retryTranscode(recordingID):
     flask.current_app.uiServer.retryTranscode(recordingID)
     return flask.redirect(flask.url_for('getTranscodingFailures'))
 
+@webServerApp.route('/deleteRecordingFromRecordingsByShow/<recordingID>')
+def deleteRecordingFromRecordingsByShow(recordingID):
+    flask.current_app.restServer.deleteRecording(recordingID)
+    return flask.redirect(flask.url_for('getRecordingsByShow'))
 
 
 #

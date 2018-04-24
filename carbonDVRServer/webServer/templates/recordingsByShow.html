@@ -15,6 +15,7 @@ Number of recordings: {{showData.numRecordings}}<BR>
     <TH>ID</TH>
     <TH colspan=2 class='right'>Date Recorded</TH>
     <TH class='right'>Duration</TH>
+    <TH>Controls</TH>
   </TR>
 {% for recording in recordingsByShow[showData] %}
   <TR>
@@ -24,6 +25,7 @@ Number of recordings: {{showData.numRecordings}}<BR>
     <TD class='flush_right'>{{recording.dateRecorded.strftime('%a, %b %d, %Y %I:%M')}}</TD>
     <TD class='flush_left'>{{recording.dateRecorded.strftime('%p')}}</TD>
     <TD class="right">{{recording.duration}}</TD>
+    <TD><A HREF="/deleteRecordingFromRecordingsByShow/{{recording.recordingID}}">Delete</A></TD>
   </TR>
 {% endfor %}
 </TABLE>
