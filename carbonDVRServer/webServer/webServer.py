@@ -60,6 +60,10 @@ def getRecordingsByShow():
 def getTranscodingFailures():
     return flask.current_app.uiServer.getTranscodingFailures()
 
+@webServerApp.route('/pendingTranscodingJobs')
+def getPendingTranscodingJobs():
+    return flask.current_app.uiServer.getPendingTranscodingJobs()
+
 @webServerApp.route('/retryTranscode/<recordingID>')
 def retryTranscode(recordingID):
     flask.current_app.uiServer.retryTranscode(recordingID)

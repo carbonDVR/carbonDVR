@@ -183,6 +183,27 @@ class UIServer:
         return recordings
 
 
+    def dbGetPendingTranscodingJobs(self):
+        recordings = []
+        query = str("SELECT recording.recording_id, show.name, episode.episode_id, episode.title, recording.date_recorded, recording.duration "
+                    "FROM recording "
+                    'JOIN show USING (show_id) '
+                    'JOIN episode USING (show_id, episode_id) '
+                    "WHERE recording.recording_id NOT IN (SELECT recording_id FROM file_transcoded_video) "
+                    "AND recording.recording_id IN (SELECT recording_id FROM file_raw_video) "
+                    "ORDER BY date_recorded DESC;")
+        with self.dbConnection.cursor() as cursor:
+            cursor.execute(query)
+            for row in cursor:
+                show = row[1].encode('ascii', 'xmlcharrefreplace').decode('ascii')           # compensate for Python's inability to cope with unicode
+                episodeNumber = row[2].encode('ascii', 'xmlcharrefreplace').decode('ascii')  # compensate for Python's inability to cope with unicode
+                episode = row[3].encode('ascii', 'xmlcharrefreplace').decode('ascii')        # compensate for Python's inability to cope with unicode
+                dateRecorded = row[4].astimezone(tzlocal.get_localzone())
+                recordings.append(Bunch(recordingID=row[0], show=show, episode=episode, episodeNumber=episodeNumber, dateRecorded=dateRecorded, duration=row[5]))
+        self.dbConnection.commit()
+        return recordings
+
+
     def dbGetNextScheduleID(self):
         scheduleID = None
         with self.dbConnection.cursor() as cursor:
@@ -212,7 +233,7 @@ class UIServer:
                         "VALUES ('test', %s, 'TrinTV Test Episode', 'This is a test episode for TrinTV', NULL);")
             cursor.execute(query, (uniqueID, ))
             query = str("INSERT INTO schedule (schedule_id, channel_major, channel_minor, start_time, duration, show_id, episode_id, rerun_code) "
-                        "VALUES (%s, '19', '1', now() + '30 seconds', '2 minutes', 'test', %s, 'R');")
+                        "VALUES (%s, '41', '1', now() + '30 seconds', '2 minutes', 'test', %s, 'R');")
             cursor.execute(query, (uniqueID, uniqueID))
         self.dbConnection.commit()
 
@@ -282,6 +303,10 @@ class UIServer:
     def getTranscodingFailures(self):
         transcodingFailures = self.dbGetTranscodingFailures()
         return render_template('transcodingFailures.html', recordings=transcodingFailures)
+
+    def getPendingTranscodingJobs(self):
+        pendingTranscodingJobs = self.dbGetPendingTranscodingJobs()
+        return render_template('pendingTranscodingJobs.html', recordings=pendingTranscodingJobs)
 
     def retryTranscode(self, recordingID):
         self.dbDeleteFailedTranscode(recordingID)
