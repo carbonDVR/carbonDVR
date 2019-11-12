@@ -69,16 +69,12 @@ def stripLeadingArticles(title):
     return title
 
 
-class RestServer:
-    def __init__(self, dbConnection, fileLocations, restServerURL):
+class RestServerDB_Postgres:
+    def __init__(self, dbConnection):
         self.dbConnection = dbConnection
-        self.fileLocations = fileLocations
-        self.restServerURL = restServerURL
 
-    def makeURL(self, endpoint):
-        return self.restServerURL + endpoint
 
-    def dbGetShowsWithRecordings(self, categoryCodes):
+    def getShowsWithRecordings(self, categoryCodes):
         shows = []
         query = str("SELECT DISTINCT ON (recording.show_id) recording.show_id, show.name, show.imageURL "
                     "FROM recording, show "
@@ -93,7 +89,7 @@ class RestServer:
         return shows
 
 
-    def dbGetEpisodeData(self, showID, categoryCodes):
+    def getEpisodeData(self, showID, categoryCodes):
         recordings = []
         query = str("SELECT recording.recording_id, recording.show_id, substring(recording.episode_id from '[[:digit:]]*'), "
                     "  episode.title, episode.description, episode.imageurl, show.imageURL "
@@ -116,7 +112,7 @@ class RestServer:
         return recordings
 
 
-    def dbGetRecordingData(self, recordingID):
+    def getRecordingData(self, recordingID):
         recordingData = None
         query = str("SELECT recording.recording_id, show.name, show.imageurl, episode.title, episode.description, (recording.date_recorded), "
                     "  recording.duration, substring(episode.episode_id from '[[:digit:]]*') "
@@ -140,7 +136,7 @@ class RestServer:
         return recordingData
 
 
-    def dbGetTranscodedVideoLocationID(self, recordingID):
+    def getTranscodedVideoLocationID(self, recordingID):
         locationID = 0
         with self.dbConnection.cursor() as cursor:
             cursor.execute('SELECT location_id FROM file_transcoded_video WHERE recording_id = %s;', (recordingID, ))
@@ -151,7 +147,7 @@ class RestServer:
         return locationID
 
 
-    def dbGetBifLocationID(self, recordingID):
+    def getBifLocationID(self, recordingID):
         locationID = 0
         with self.dbConnection.cursor() as cursor:
             cursor.execute('SELECT location_id FROM file_bif WHERE recording_id = %s;', (recordingID, ))
@@ -162,19 +158,19 @@ class RestServer:
         return locationID
 
 
-    def dbDeleteRecording(self, recordingID):
+    def deleteRecording(self, recordingID):
         with self.dbConnection.cursor() as cursor:
             cursor.execute('DELETE FROM recording WHERE recording_id = %s;', (recordingID, ))
         self.dbConnection.commit()
 
-    def dbSetPlaybackPosition(self, recordingID, playbackPosition):
+    def setPlaybackPosition(self, recordingID, playbackPosition):
         with self.dbConnection.cursor() as cursor:
             cursor.execute('UPDATE playback_position SET position = %s WHERE recording_id = %s;', (playbackPosition, recordingID))
             if cursor.rowcount == 0:
                 cursor.execute('INSERT INTO playback_position (recording_id, position) VALUES (%s, %s);', (recordingID, playbackPosition))
         self.dbConnection.commit()
 
-    def dbGetPlaybackPosition(self, recordingID):
+    def getPlaybackPosition(self, recordingID):
         playbackPosition = 0
         with self.dbConnection.cursor() as cursor:
             cursor.execute('SELECT position FROM playback_position WHERE recording_id = %s;', (recordingID, ))
@@ -184,12 +180,12 @@ class RestServer:
         self.dbConnection.commit()
         return {'playbackPosition': playbackPosition}
 
-    def dbSetCategoryCode(self, recordingID, categoryCode):
+    def setCategoryCode(self, recordingID, categoryCode):
         with self.dbConnection.cursor() as cursor:
             cursor.execute('UPDATE recording SET rerun_code = %s WHERE recording_id = %s;', (categoryCode, recordingID))
         self.dbConnection.commit()
 
-    def dbGetCategoryCode(self, recordingID):
+    def getCategoryCode(self, recordingID):
         categoryCode = ''
         with self.dbConnection.cursor() as cursor:
             cursor.execute('SELECT rerun_code FROM recording WHERE recording_id = %s;', (recordingID, ))
@@ -199,13 +195,23 @@ class RestServer:
         self.dbConnection.commit()
         return categoryCode
 
-    def dbRemainingListingTime(self):
+    def getRemainingListingTime(self):
         with self.dbConnection:
             with self.dbConnection.cursor() as cursor:
                 cursor.execute('SELECT max(start_time) - now() FROM schedule;')
                 row = cursor.fetchone()
                 return row[0]
 
+
+
+class RestServer:
+    def __init__(self, db, fileLocations, restServerURL):
+        self.db = db
+        self.fileLocations = fileLocations
+        self.restServerURL = restServerURL
+
+    def makeURL(self, endpoint):
+        return self.restServerURL + endpoint
 
     def rokufyShowData(self, showData):
         rokuData = {}
@@ -257,67 +263,67 @@ class RestServer:
 
 
     def getAllShows(self):
-        showList = self.dbGetShowsWithRecordings(['N', 'R', 'A'])
+        showList = self.db.getShowsWithRecordings(['N', 'R', 'A'])
         rokuList = [self.rokufyShowData(show) for show in showList]
         rokuList.sort(key=lambda show: stripLeadingArticles(show['title']))
         return listToRokuXml('shows', 'show', rokuList)
 
     def getShowsWithNewEpisodes(self):
-        showList = self.dbGetShowsWithRecordings(['N'])
+        showList = self.db.getShowsWithRecordings(['N'])
         rokuList = [self.rokufyShowData(show) for show in showList]
         rokuList.sort(key=lambda show: stripLeadingArticles(show['title']))
         return listToRokuXml('shows', 'show', rokuList)
 
     def getShowEpisodesNew(self, showID):
-        episodeList = self.dbGetEpisodeData(showID, ['N'])
+        episodeList = self.db.getEpisodeData(showID, ['N'])
         rokuList = [self.rokufyEpisodeData(episode) for episode in episodeList]
         return listToRokuXml('shows', 'show', rokuList)
 
     def getShowEpisodesRerun(self, showID):
-        episodeList = self.dbGetEpisodeData(showID, ['R'])
+        episodeList = self.db.getEpisodeData(showID, ['R'])
         rokuList = [self.rokufyEpisodeData(episode) for episode in episodeList]
         return listToRokuXml('shows', 'show', rokuList)
 
     def getShowEpisodesArchive(self, showID):
-        episodeList = self.dbGetEpisodeData(showID, ['A'])
+        episodeList = self.db.getEpisodeData(showID, ['A'])
         rokuList = [self.rokufyEpisodeData(episode) for episode in episodeList]
         xml = listToRokuXml('shows', 'show', rokuList)
         return xml
 
     def getRecording(self, recordingID):
-        recordingData = self.dbGetRecordingData(recordingID)
-        transcodedVideoLocationID = self.dbGetTranscodedVideoLocationID(recordingID)
+        recordingData = self.db.getRecordingData(recordingID)
+        transcodedVideoLocationID = self.db.getTranscodedVideoLocationID(recordingID)
         recordingData['transcodedVideoURL'] = self.fileLocations.getTranscodedVideoURL(locationID = transcodedVideoLocationID, recordingID = recordingID)
-        bifLocationID = self.dbGetBifLocationID(recordingID)
+        bifLocationID = self.db.getBifLocationID(recordingID)
         recordingData['bifURL'] = self.fileLocations.getBifURL(locationID = bifLocationID, recordingID = recordingID)
         rokuData = self.rokufyRecordingData(recordingData)
         return listToRokuXml('springboard', 'show', [rokuData])
 
     def deleteRecording(self, recordingID):
-        self.dbDeleteRecording(recordingID)
+        self.db.deleteRecording(recordingID)
         return str(), 200
 
     def getPlaybackPosition(self, recordingID):
-        return str(self.dbGetPlaybackPosition(recordingID)['playbackPosition'])
+        return str(self.db.getPlaybackPosition(recordingID)['playbackPosition'])
 
     def setPlaybackPosition(self, recordingID, playbackPosition):
-        self.dbSetPlaybackPosition(recordingID, playbackPosition)
+        self.db.setPlaybackPosition(recordingID, playbackPosition)
         return str(), 200
 
     def getArchiveState(self, recordingID):
-        categoryCode = self.dbGetCategoryCode(recordingID)
+        categoryCode = self.db.getCategoryCode(recordingID)
         if categoryCode == 'A':
             return '1', 200
         else:
             return '0', 200
 
     def archiveRecording(self, recordingID):
-        self.dbSetCategoryCode(recordingID, 'A')
+        self.db.setCategoryCode(recordingID, 'A')
         return str(), 200
 
     def getAlarms(self):
         alarmList = []
-        remainingListingTime = self.dbRemainingListingTime()
+        remainingListingTime = self.db.getRemainingListingTime()
         if remainingListingTime.days < 10:
             alarmList.append('Only {} days of listings remaining'.format(remainingListingTime.days))
         if not alarmList and datetime.datetime.now().date().day == 1:

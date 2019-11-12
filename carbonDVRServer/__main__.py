@@ -119,8 +119,10 @@ if __name__ == '__main__':
         recorder.scheduleRecordings()
 
     logging.getLogger('werkzeug').setLevel(logging.WARNING)            # turn down the logging from werkzeug
-    webServer.webServerApp.restServer = webServer.RestServer(dbConnection, carbonDVRConfig.fileLocations, restConfig.restServerURL)
-    webServer.webServerApp.uiServer = webServer.UIServer(dbConnection, uiConfig.uiServerURL, scheduleRecordingsCallback)
+    restServerDB = webServer.RestServerDB_Postgres(dbConnection)
+    webServer.webServerApp.restServer = webServer.RestServer(restServerDB, carbonDVRConfig.fileLocations, restConfig.restServerURL)
+    uiServerDB = webServer.UIServerDB_Postgres(dbConnection)
+    webServer.webServerApp.uiServer = webServer.UIServer(uiServerDB, uiConfig.uiServerURL, scheduleRecordingsCallback)
 #    webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort), debug=True)
     webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort))
 

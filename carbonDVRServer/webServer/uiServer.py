@@ -15,16 +15,12 @@ class Bunch():
         self.__dict__.update(kwds)
 
 
-class UIServer:
-    def __init__(self, dbConnection, uiServerURL, scheduleRecordingsCallback):
+class UIServerDB_Postgres:
+    def __init__(self, dbConnection):
         self.dbConnection = dbConnection
-        self.uiServerURL = uiServerURL
-        self.scheduleRecordingsCallback = scheduleRecordingsCallback
 
-    def makeURL(self, endpoint):
-        return self.uiServerURL + endpoint
 
-    def dbGetAllRecordings(self):
+    def getAllRecordings(self):
         recordings = []
         query = str("SELECT recording.recording_id, show.name, episode.episode_id, episode.title, recording.date_recorded, recording.duration "
                     "FROM recording "
@@ -44,7 +40,7 @@ class UIServer:
         return recordings
 
 
-    def dbGetRecentRecordings(self):
+    def getRecentRecordings(self):
         # fetch from database
         recordings = []
         query = str("SELECT recording.recording_id, show.name, episode.episode_id, episode.title, recording.date_recorded, recording.duration "
@@ -65,7 +61,7 @@ class UIServer:
         return recordings
 
 
-    def dbGetUpcomingRecordings(self):
+    def getUpcomingRecordings(self):
         schedules = []
         query = str("SELECT DISTINCT ON (schedule.show_id, schedule.episode_id) "
                     "schedule.schedule_id, schedule.start_time, schedule.channel_major, schedule.channel_minor,"
@@ -92,7 +88,7 @@ class UIServer:
         return schedules
 
 
-    def dbGetShowList(self):
+    def getShowList(self):
         subscribedShows = []
         unsubscribedShows = []
         with self.dbConnection.cursor() as cursor:
@@ -110,19 +106,19 @@ class UIServer:
         return Bunch(subscribed=subscribedShows, unsubscribed=unsubscribedShows)
 
 
-    def dbSubscribe(self, showID):
+    def subscribe(self, showID):
         with self.dbConnection.cursor() as cursor:
             cursor.execute('INSERT INTO subscription (show_id, priority) VALUES (%s, %s);', (showID, 0 ))
         self.dbConnection.commit()
 
 
-    def dbUnsubscribe(self, showID):
+    def unsubscribe(self, showID):
         with self.dbConnection.cursor() as cursor:
             cursor.execute('DELETE FROM subscription WHERE show_id = %s;', (showID, ))
         self.dbConnection.commit()
 
 
-    def dbGetInconsistencies(self):
+    def getInconsistencies(self):
         recordingsWithoutFileRecords = []
         fileRecordsWithoutRecordings = []
         rawVideoFilesThatCanBeDeleted= []
@@ -163,7 +159,7 @@ class UIServer:
         return Bunch(recordingsWithoutFileRecords=recordingsWithoutFileRecords, fileRecordsWithoutRecordings=fileRecordsWithoutRecordings, rawVideoFilesThatCanBeDeleted=rawVideoFilesThatCanBeDeleted)
 
 
-    def dbGetTranscodingFailures(self):
+    def getTranscodingFailures(self):
         recordings = []
         query = str("SELECT recording.recording_id, show.name, episode.episode_id, episode.title, recording.date_recorded "
                     "FROM recording "
@@ -183,7 +179,7 @@ class UIServer:
         return recordings
 
 
-    def dbGetPendingTranscodingJobs(self):
+    def getPendingTranscodingJobs(self):
         recordings = []
         query = str("SELECT recording.recording_id, show.name, episode.episode_id, episode.title, recording.date_recorded, recording.duration "
                     "FROM recording "
@@ -204,7 +200,7 @@ class UIServer:
         return recordings
 
 
-    def dbGetNextScheduleID(self):
+    def getNextScheduleID(self):
         scheduleID = None
         with self.dbConnection.cursor() as cursor:
             cursor.execute("SELECT nextval('schedule_schedule_id_seq');", ())
@@ -225,9 +221,9 @@ class UIServer:
             cursor.execute("INSERT INTO show (show_id, show_type, name, imageurl) VALUES ('test','EP','Test Show',NULL);")
 
 
-    def dbScheduleTestRecording(self):
+    def scheduleTestRecording(self):
         self.dbInsertTestShow()
-        uniqueID = self.dbGetNextScheduleID()
+        uniqueID = self.getNextScheduleID()
         with self.dbConnection.cursor() as cursor:
             query = str("INSERT INTO episode (show_id, episode_id, title, description, imageurl) "
                         "VALUES ('test', %s, 'TrinTV Test Episode', 'This is a test episode for TrinTV', NULL);")
@@ -238,58 +234,61 @@ class UIServer:
         self.dbConnection.commit()
 
 
-    def dbDeleteFailedTranscode(self, recordingID):
+    def deleteFailedTranscode(self, recordingID):
         with self.dbConnection.cursor() as cursor:
             query = str("DELETE FROM file_transcoded_video WHERE recording_id = %s AND state = 1;")
             cursor.execute(query, (recordingID, ))
         self.dbConnection.commit()
 
 
+
+
+
+class UIServer:
+    def __init__(self, db, uiServerURL, scheduleRecordingsCallback):
+        self.db = db
+        self.uiServerURL = uiServerURL
+        self.scheduleRecordingsCallback = scheduleRecordingsCallback
+
+    def makeURL(self, endpoint):
+        return self.uiServerURL + endpoint
+
     def getIndex(self):
         return render_template('index.html')
 
-
     def getRecordingsByDate(self):
-        recordings = self.dbGetAllRecordings()
+        recordings = self.db.getAllRecordings()
         return render_template('recordingsByDate.html', recordings=recordings)
 
-
     def getRecentRecordings(self):
-        recordings = self.dbGetRecentRecordings()
+        recordings = self.db.getRecentRecordings()
         return render_template('recentRecordings.html', recordings=recordings)
 
-
     def getUpcomingRecordings(self):
-        schedules = self.dbGetUpcomingRecordings()
+        schedules = self.db.getUpcomingRecordings()
         return render_template('upcomingRecordings.html', schedules=schedules)
 
-
     def getShowList(self):
-        shows = self.dbGetShowList()
+        shows = self.db.getShowList()
         return render_template('showList.html', subscribedShows=shows.subscribed, unsubscribedShows=shows.unsubscribed)
 
-
     def subscribe(self, showID):
-        self.dbSubscribe(showID)
-
+        self.db.subscribe(showID)
 
     def unsubscribe(self, showID):
-        self.dbUnsubscribe(showID)
-
+        self.db.unsubscribe(showID)
 
     def getDatabaseInconsistencies(self):
-        inconsistencies = self.dbGetInconsistencies()
+        inconsistencies = self.db.getInconsistencies()
         return render_template('databaseInconsistencies.html', recordingsWithoutFileRecords=inconsistencies.recordingsWithoutFileRecords,
             fileRecordsWithoutRecordings=inconsistencies.fileRecordsWithoutRecordings, rawVideoFilesThatCanBeDeleted=inconsistencies.rawVideoFilesThatCanBeDeleted)
 
-
     def scheduleTestRecording(self):
-        self.dbScheduleTestRecording()
+        self.db.scheduleTestRecording()
         self.scheduleRecordingsCallback()
 
-
     def getRecordingsByShow(self):
-        allRecordings = self.dbGetAllRecordings()
+        allRecordings = self.db.getAllRecordings()
         showList = []
         recordingsByShow = {}
         for showName in set([x.show for x in allRecordings]):
@@ -301,12 +300,13 @@ class UIServer:
         return render_template('recordingsByShow.html', showList=showList, recordingsByShow=recordingsByShow)
 
     def getTranscodingFailures(self):
-        transcodingFailures = self.dbGetTranscodingFailures()
+        transcodingFailures = self.db.getTranscodingFailures()
         return render_template('transcodingFailures.html', recordings=transcodingFailures)
 
     def getPendingTranscodingJobs(self):
-        pendingTranscodingJobs = self.dbGetPendingTranscodingJobs()
+        pendingTranscodingJobs = self.db.getPendingTranscodingJobs()
         return render_template('pendingTranscodingJobs.html', recordings=pendingTranscodingJobs)
 
     def retryTranscode(self, recordingID):
-        self.dbDeleteFailedTranscode(recordingID)
+        self.db.deleteFailedTranscode(recordingID)
+
