@@ -56,6 +56,55 @@ class carbonDVRDatabase:
         return numRowsDeleted
 
 
+class sqliteDatabase:
+    def __init__(self, dbConnection):
+        self.connection = dbConnection
+
+    def commit(self):
+        self.connection.commit()
+
+    def insertShow(self, showID, showType, showName):
+        numRowsInserted = 0
+        cursor = self.connection.cursor();
+        cursor.execute("SELECT count(*) FROM show WHERE show_id = ?", (showID, ))
+        if cursor.fetchone()[0] == 0:
+            cursor.execute("INSERT INTO show(show_id, show_type, name) VALUES (?, ?, ?)", (showID, showType, showName))
+            numRowsInserted += cursor.rowcount
+        else:
+            cursor.execute("UPDATE show set show_type = ?, name = ? WHERE show_id = ?", (showType, showName, showID))
+        return numRowsInserted
+
+    def insertEpisode(self, showID, episodeID, episodeTitle, episodeDescription, partCode):
+        numRowsInserted = 0
+        cursor = self.connection.cursor();
+        cursor.execute("SELECT count(*) FROM episode WHERE show_id = ? AND episode_id = ?", (showID, episodeID))
+        if cursor.fetchone()[0] == 0:
+            cursor.execute("INSERT INTO episode(show_id, episode_id, title, description, part_code) VALUES (?, ?, ?, ?, ?)", (showID, episodeID, episodeTitle, episodeDescription, partCode))
+            numRowsInserted += cursor.rowcount
+        return numRowsInserted
+
+    def insertSchedule(self, channelMajor, channelMinor, startTime, duration, showID, episodeID, rerunCode):
+        numRowsInserted = 0
+        cursor = self.connection.cursor();
+        cursor.execute('INSERT INTO schedule(channel_major, channel_minor, start_time, duration, show_id, episode_id, rerun_code) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                           (channelMajor, channelMinor, startTime, duration, showID, episodeID, rerunCode))
+        return cursor.rowcount
+
+    def getChannels(self):
+        channelSet = set()
+        cursor = self.connection.cursor();
+        cursor.execute("SELECT major, minor FROM channel")
+        for row in cursor:
+            channelSet.add((row[0],row[1]))
+        return channelSet
+
+    def clearScheduleTable(self):
+        numRowsDeleted = 0
+        cursor = self.connection.cursor();
+        cursor.execute("DELETE FROM schedule")
+        return cursor.rowcount
+
+
 # helper class to extract Show Type, Show ID, and Episode ID from a Program ID
 class ProgramID:
     def __init__(self, programID):
