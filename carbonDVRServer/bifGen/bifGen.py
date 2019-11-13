@@ -80,23 +80,11 @@ def makeBIF( filename, directory, interval ):
     f.close()
 
 
-
-class BifGen:
-
-    def __init__(self, dbConnection, imageCommand, imageDir, bifFilespec, frameInterval):
-        self.logger = logging.getLogger(__name__)
-        self.workingLock = threading.Lock()
+class BifGenDB_Postgres:
+    def __init__(self, dbConnection):
         self.dbConnection = dbConnection
-        self.ffmpegCommand = imageCommand
-        self.imageDir = imageDir
-        self.bifFilespec = bifFilespec
-        self.frameInterval = frameInterval
-        self.logger.debug("Template ffmepg command: {}".format(self.ffmpegCommand))
-        self.logger.debug("Image directory: {}".format(self.imageDir))
-        self.logger.debug("BIF filespec: {}".format(self.bifFilespec))
-        self.logger.debug("Frame interval: {}ms".format(self.frameInterval))
 
-    def dbGetRecordingsToBif(self):
+    def getRecordingsToBif(self):
         recordings = []
         with self.dbConnection.cursor() as cursor:
             cursor.execute("SELECT recording_id, filename FROM file_transcoded_video WHERE state = %s AND recording_id NOT IN (SELECT recording_id FROM file_bif);", (0, ))
@@ -105,10 +93,27 @@ class BifGen:
         self.dbConnection.commit()
         return recordings
 
-    def dbInsertBifFileLocation(self, recordingID, locationID, filename):
+    def insertBifFileLocation(self, recordingID, locationID, filename):
         with self.dbConnection.cursor() as cursor:
             cursor.execute("INSERT INTO file_bif(recording_id, location_id, filename) VALUES (%s, %s, %s)", (recordingID, locationID, filename))
         self.dbConnection.commit()
+
+
+
+class BifGen:
+
+    def __init__(self, db, imageCommand, imageDir, bifFilespec, frameInterval):
+        self.logger = logging.getLogger(__name__)
+        self.workingLock = threading.Lock()
+        self.db = db
+        self.ffmpegCommand = imageCommand
+        self.imageDir = imageDir
+        self.bifFilespec = bifFilespec
+        self.frameInterval = frameInterval
+        self.logger.debug("Template ffmepg command: {}".format(self.ffmpegCommand))
+        self.logger.debug("Image directory: {}".format(self.imageDir))
+        self.logger.debug("BIF filespec: {}".format(self.bifFilespec))
+        self.logger.debug("Frame interval: {}ms".format(self.frameInterval))
 
     def clearImageDirectory(self):
         self.logger.debug("Clearing image directory {}".format(self.imageDir))
@@ -152,14 +157,14 @@ class BifGen:
         self.logger.info("Generating BIF file {}".format(bifFile))
         makeBIF(bifFile, self.imageDir, self.frameInterval)
         # mark recording as "biffed"
-        self.dbInsertBifFileLocation(recordingID, locationID, bifFile)
+        self.db.insertBifFileLocation(recordingID, locationID, bifFile)
         # cleanup
         self.clearImageDirectory()
         self.logger.info("BIF generation complete")
 
     def bifRecordings(self):
         with self.workingLock:
-            recordings = self.dbGetRecordingsToBif()
+            recordings = self.db.getRecordingsToBif()
             for recording in recordings[:1]:
                 self.bifRecording(recording)
 

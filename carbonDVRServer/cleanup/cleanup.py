@@ -13,12 +13,11 @@ class Bunch:
     def __init__(self, **kwds):
         self.__dict__.update(kwds)
 
-class Cleanup:
+class CleanupDB_Postgres:
     def __init__(self, dbConnection):
-        self.cleaningLock = threading.Lock()
         self.dbConnection = dbConnection
 
-    def dbGetUnreferencedRawVideoRecords(self):
+    def getUnreferencedRawVideoRecords(self):
         records = []
         query = str('SELECT recording_id, filename '
                     'FROM file_raw_video '
@@ -31,25 +30,12 @@ class Cleanup:
         self.dbConnection.commit()
         return records
 
-
-    def dbDeleteRawVideoRecord(self, recordingID):
+    def deleteRawVideoRecord(self, recordingID):
         with self.dbConnection.cursor() as cursor:
             cursor.execute('DELETE FROM file_raw_video WHERE recording_id = %s', (recordingID, ))
         self.dbConnection.commit()
 
-
-    def purgeUnreferencedRawVideoRecords(self):
-        logger = logging.getLogger(__name__)
-        for record in self.dbGetUnreferencedRawVideoRecords():
-           logger.info('Deleting file: {}'.format(record.filename))
-           try:
-               os.unlink(record.filename)
-           except FileNotFoundError:
-               logger.info('File not found: {}'.format(record.filename))
-           self.dbDeleteRawVideoRecord(record.recordingID)
-
-
-    def dbGetUnreferencedTranscodedVideoRecords(self):
+    def getUnreferencedTranscodedVideoRecords(self):
         records = []
         query = str('SELECT recording_id, filename '
                     'FROM file_transcoded_video '
@@ -62,25 +48,12 @@ class Cleanup:
         self.dbConnection.commit()
         return records
 
-
-    def dbDeleteTranscodedVideoRecord(self, recordingID):
+    def deleteTranscodedVideoRecord(self, recordingID):
         with self.dbConnection.cursor() as cursor:
             cursor.execute('DELETE FROM file_transcoded_video WHERE recording_id = %s', (recordingID, ))
         self.dbConnection.commit()
 
-
-    def purgeUnreferencedTranscodedVideoRecords(self):
-        logger = logging.getLogger(__name__)
-        for record in self.dbGetUnreferencedTranscodedVideoRecords():
-           logger.info('Deleting file: {}'.format(record.filename))
-           try:
-               os.unlink(record.filename)
-           except FileNotFoundError:
-               logger.info('File not found: {}'.format(record.filename))
-           self.dbDeleteTranscodedVideoRecord(record.recordingID)
-
-
-    def dbGetUnreferencedBifRecords(self):
+    def getUnreferencedBifRecords(self):
         records = []
         query = str('SELECT recording_id, filename '
                     'FROM file_bif '
@@ -93,25 +66,12 @@ class Cleanup:
         self.dbConnection.commit()
         return records
 
-
-    def dbDeleteBifRecord(self, recordingID):
+    def deleteBifRecord(self, recordingID):
         with self.dbConnection.cursor() as cursor:
             cursor.execute('DELETE FROM file_bif WHERE recording_id = %s', (recordingID, ))
         self.dbConnection.commit()
 
-
-    def purgeUnreferencedBifRecords(self):
-        logger = logging.getLogger(__name__)
-        for record in self.dbGetUnreferencedBifRecords():
-           logger.info('Deleting file: {}'.format(record.filename))
-           try:
-               os.unlink(record.filename)
-           except FileNotFoundError:
-               logger.info('File not found: {}'.format(record.filename))
-           self.dbDeleteBifRecord(record.recordingID)
-
-
-    def dbGetUnneededRawVideoRecords(self):
+    def getUnneededRawVideoRecords(self):
         records = []
         query = str('SELECT file_raw_video.recording_id, file_raw_video.filename '
                     'FROM file_raw_video '
@@ -126,15 +86,52 @@ class Cleanup:
         return records
 
 
-    def purgeUnneededRawVideoRecords(self):
+class Cleanup:
+    def __init__(self, db):
+        self.cleaningLock = threading.Lock()
+        self.db = db
+
+    def purgeUnreferencedRawVideoRecords(self):
         logger = logging.getLogger(__name__)
-        for record in self.dbGetUnneededRawVideoRecords():
+        for record in self.dbGetUnreferencedRawVideoRecords():
            logger.info('Deleting file: {}'.format(record.filename))
            try:
                os.unlink(record.filename)
            except FileNotFoundError:
                logger.info('File not found: {}'.format(record.filename))
-           self.dbDeleteRawVideoRecord(record.recordingID)
+           self.db.deleteRawVideoRecord(record.recordingID)
+
+    def purgeUnreferencedTranscodedVideoRecords(self):
+        logger = logging.getLogger(__name__)
+        for record in self.dbGetUnreferencedTranscodedVideoRecords():
+           logger.info('Deleting file: {}'.format(record.filename))
+           try:
+               os.unlink(record.filename)
+           except FileNotFoundError:
+               logger.info('File not found: {}'.format(record.filename))
+           self.db.deleteTranscodedVideoRecord(record.recordingID)
+
+
+    def purgeUnreferencedBifRecords(self):
+        logger = logging.getLogger(__name__)
+        for record in self.db.getUnreferencedBifRecords():
+           logger.info('Deleting file: {}'.format(record.filename))
+           try:
+               os.unlink(record.filename)
+           except FileNotFoundError:
+               logger.info('File not found: {}'.format(record.filename))
+           self.db.deleteBifRecord(record.recordingID)
+
+
+    def purgeUnneededRawVideoRecords(self):
+        logger = logging.getLogger(__name__)
+        for record in self.db.getUnneededRawVideoRecords():
+           logger.info('Deleting file: {}'.format(record.filename))
+           try:
+               os.unlink(record.filename)
+           except FileNotFoundError:
+               logger.info('File not found: {}'.format(record.filename))
+           self.db.deleteRawVideoRecord(record.recordingID)
 
     def cleanup(self):
         logger = logging.getLogger(__name__)

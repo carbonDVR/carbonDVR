@@ -94,14 +94,17 @@ if __name__ == '__main__':
     hdhomerun = recorder.HDHomeRunInterface(channels, tuners, recorderConfig.hdhomerunBinary)
     recorder = recorder.Recorder(scheduler, hdhomerun, recorderDBInterface, recorderConfig.videoFilespec, recorderConfig.logFilespec)
 
-    transcoder = transcoder.Transcoder(dbConnection, transcoderConfig.lowCommand, transcoderConfig.mediumCommand, transcoderConfig.highCommand,
+    transcoderDB = transcoder.TranscoderDB_Postgres(dbConnection)
+    transcoder = transcoder.Transcoder(transcoderDB, transcoderConfig.lowCommand, transcoderConfig.mediumCommand, transcoderConfig.highCommand,
         transcoderConfig.outputFilespec, transcoderConfig.logFilespec)
     scheduler.add_job(transcoder.transcodeRecordings, trigger=IntervalTrigger(seconds=60))
 
-    bifGen = bifGen.BifGen(dbConnection, bifGenConfig.imageCommand, bifGenConfig.imageDir, bifGenConfig.bifFilespec, bifGenConfig.frameInterval)
+    bifGenDB = bifGen.BifGenDB_Postgres(dbConnection)
+    bifGen = bifGen.BifGen(bifGenDB, bifGenConfig.imageCommand, bifGenConfig.imageDir, bifGenConfig.bifFilespec, bifGenConfig.frameInterval)
     scheduler.add_job(bifGen.bifRecordings, trigger=IntervalTrigger(seconds=60))
 
-    cleanup = cleanup.Cleanup(dbConnection)
+    cleanupDB = cleanup.CleanupDB_Postgres(dbConnection)
+    cleanup = cleanup.Cleanup(cleanupDB)
     scheduler.add_job(cleanup.cleanup, trigger=IntervalTrigger(minutes=60))
 
     def fetchListings():
@@ -123,6 +126,12 @@ if __name__ == '__main__':
     webServer.webServerApp.restServer = webServer.RestServer(restServerDB, carbonDVRConfig.fileLocations, restConfig.restServerURL)
     uiServerDB = webServer.UIServerDB_Postgres(dbConnection)
     webServer.webServerApp.uiServer = webServer.UIServer(uiServerDB, uiConfig.uiServerURL, scheduleRecordingsCallback)
-#    webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort), debug=True)
-    webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort))
+
+    # There's something about the web vivaldi browser that cause flask to block, so that can't process requests from other clients.
+    # If the vivaldi browser makes a second request, any pending requests from other clients are serviced, then the vivaldi request
+    # is serviced, and then we're back to being blocked so that only the vivaldi browser can make requests.
+    # Likely culprit is some kind of keep-alive mechanism.
+    # As a (dubious and risky) workaround, enable multithreading in flask, so that other threads are available to service the non-vivaldi clients.
+#    webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort), threaded=True, debug=True)
+    webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort), threaded=True)
 
