@@ -1,12 +1,12 @@
 import os
 import sqlite3
 import unittest
-from sqliteDatabase import SqliteDatabase
+from sqliteDatabase import SqliteDatabase, TranscodingState
 from datetime import datetime, timedelta
 
 
-class TestDatabase(unittest.TestCase):
-    def test_carbonDVRDatabase_getTuners(self):
+class TestSqliteDatabase(unittest.TestCase):
+    def test_getTuners(self):
         db = SqliteDatabase(":memory:")
         db.initializeSchema()
         self.assertEqual(1, db.insertTuner('foo','192.168.1.1',1))
@@ -20,7 +20,7 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual('192.168.1.1', tuners[1].ipAddress)
         self.assertEqual(1, tuners[1].tunerID)
         
-    def test_carbonDVRDatabase_getChannels(self):
+    def test_getChannels(self):
         db = SqliteDatabase(":memory:")
         db.initializeSchema()
         self.assertEqual(1, db.insertChannel(4,1,5,1))
@@ -41,7 +41,18 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(18, channels[2].channelActual)
         self.assertEqual(2, channels[2].program)
 
-    def test_carbonDVRDatabase_getPendingRecordings(self):
+    def test_getUniqueID(self):
+        db = SqliteDatabase(":memory:")
+        db.initializeSchema()
+        uniqueID1 = db.getUniqueID();
+        uniqueID2 = db.getUniqueID();
+        uniqueID3 = db.getUniqueID();
+        uniqueID4 = db.getUniqueID();
+        self.assertEqual(uniqueID1+1, uniqueID2)
+        self.assertEqual(uniqueID1+2, uniqueID3)
+        self.assertEqual(uniqueID1+3, uniqueID4)
+
+    def test_getPendingRecordings(self):
         db = SqliteDatabase(":memory:")
 #        db = SqliteDatabase("/tmp/jnm001.dat")
         db.initializeSchema()
@@ -103,6 +114,109 @@ class TestDatabase(unittest.TestCase):
         db.deleteSubscription(showID="show2")
         self.assertEqual(0, len(db.getPendingRecordings()))
 
+    def test_getRecordingsToBif(self):
+        db = SqliteDatabase(":memory:")
+        db.initializeSchema()
+        db.insertTranscodedFileLocation(1167, 0, "file1.mp4", db.TRANSCODE_SUCCESSFUL)
+        db.insertTranscodedFileLocation(1235, 0, "file2.mp4", db.TRANSCODE_SUCCESSFUL)
+        db.insertTranscodedFileLocation(1311, 0, "file3.mp4", db.TRANSCODE_FAILED)
+        db.insertTranscodedFileLocation(1492, 0, "file4.mp4", db.TRANSCODE_SUCCESSFUL)
+        db.insertBifFileLocation(1167, 1, "file1.bif")
+        filesToBif = sorted(db.getRecordingsToBif(), key=lambda x:x.recordingID)
+        self.assertEqual(2, len(filesToBif))
+        self.assertEqual(1235, filesToBif[0].recordingID)
+        self.assertEqual("file2.mp4", filesToBif[0].filename)
+        self.assertEqual(1492, filesToBif[1].recordingID)
+        self.assertEqual("file4.mp4", filesToBif[1].filename)
+
+    def test_getUnreferencedRawVideoRecords(self):
+        db = SqliteDatabase(":memory:")
+        db.initializeSchema()
+        db.insertRecording(1234, "show1", "episode2", datetime.utcnow() - timedelta(weeks=1), timedelta(minutes=30), 'N')
+        db.insertRawFileLocation(1234, "1234.mp4")
+        db.insertRawFileLocation(1235, "1235.mp4")
+        records = db.getUnreferencedRawVideoRecords()
+        self.assertEqual(1, len(records))
+        self.assertEqual(1235, records[0].recordingID)
+        self.assertEqual("1235.mp4", records[0].filename)
+
+    def test_deleteRawVideoRecord(self):
+        db = SqliteDatabase(":memory:")
+        db.initializeSchema()
+        db.insertRawFileLocation(1234, "1234.mp4")
+        db.insertRawFileLocation(1235, "1235.mp4")
+        records = sorted(db.getUnreferencedRawVideoRecords(), key=lambda x:x.recordingID)
+        self.assertEqual(2, len(records))
+        self.assertEqual(1234, records[0].recordingID)
+        self.assertEqual(1235, records[1].recordingID)
+        db.deleteRawVideoRecord(1234)
+        records = db.getUnreferencedRawVideoRecords()
+        self.assertEqual(1, len(records))
+        self.assertEqual(1235, records[0].recordingID)
+
+    def test_getUnreferencedTranscodedVideoRecords(self):
+        db = SqliteDatabase(":memory:")
+        db.initializeSchema()
+        self.assertEqual(1, db.insertRecording(1234, "show1", "episode2", datetime.utcnow() - timedelta(weeks=1), timedelta(minutes=30), 'N'))
+        self.assertEqual(1, db.insertTranscodedFileLocation(1234, 0, "1234.mp4", db.TRANSCODE_SUCCESSFUL))
+        self.assertEqual(1, db.insertTranscodedFileLocation(1235, 0, "1235.mp4", db.TRANSCODE_FAILED))
+        records = db.getUnreferencedTranscodedVideoRecords()
+        self.assertEqual(1, len(records))
+        self.assertEqual(1235, records[0].recordingID)
+        self.assertEqual("1235.mp4", records[0].filename)
+
+    def test_deleteTranscodedVideoRecord(self):
+        db = SqliteDatabase(":memory:")
+        db.initializeSchema()
+        self.assertEqual(1, db.insertTranscodedFileLocation(1234, 0, "1234.mp4", db.TRANSCODE_SUCCESSFUL))
+        self.assertEqual(1, db.insertTranscodedFileLocation(1235, 0, "1235.mp4", db.TRANSCODE_FAILED))
+        records = db.getUnreferencedTranscodedVideoRecords()
+        self.assertEqual(2, len(records))
+        self.assertEqual(1234, records[0].recordingID)
+        self.assertEqual(1235, records[1].recordingID)
+        self.assertEqual(1, db.deleteTranscodedVideoRecord(1234))
+        records = db.getUnreferencedTranscodedVideoRecords()
+        self.assertEqual(1, len(records))
+        self.assertEqual(1235, records[0].recordingID)
+
+    def test_getUnreferencedBifRecords(self):
+        db = SqliteDatabase(":memory:")
+        db.initializeSchema()
+        self.assertEqual(1, db.insertRecording(1234, "show1", "episode2", datetime.utcnow() - timedelta(weeks=1), timedelta(minutes=30), 'N'))
+        self.assertEqual(1, db.insertBifFileLocation(1234, 0, "1234.bif"))
+        self.assertEqual(1, db.insertBifFileLocation(1235, 0, "1235.bif"))
+        records = db.getUnreferencedBifRecords()
+        self.assertEqual(1, len(records))
+        self.assertEqual(1235, records[0].recordingID)
+        self.assertEqual("1235.bif", records[0].filename)
+
+    def test_deleteBifRecord(self):
+        db = SqliteDatabase(":memory:")
+        db.initializeSchema()
+        self.assertEqual(1, db.insertBifFileLocation(1234, 0, "1234.bif"))
+        self.assertEqual(1, db.insertBifFileLocation(1235, 0, "1235.bif"))
+        records = db.getUnreferencedBifRecords()
+        self.assertEqual(2, len(records))
+        self.assertEqual(1234, records[0].recordingID)
+        self.assertEqual(1235, records[1].recordingID)
+        self.assertEqual(1, db.deleteBifRecord(1234))
+        records = db.getUnreferencedBifRecords()
+        self.assertEqual(1, len(records))
+        self.assertEqual(1235, records[0].recordingID)
+
+    def test_getUnneededRawVideoRecords(self):
+        db = SqliteDatabase(":memory:")
+        db.initializeSchema()
+        self.assertEqual(1, db.insertRawFileLocation(1234, "1234.mpeg"))
+        self.assertEqual(1, db.insertRawFileLocation(1235, "1235.mpeg"))
+        self.assertEqual(1, db.insertRawFileLocation(1236, "1236.mpeg"))
+        self.assertEqual(1, db.insertTranscodedFileLocation(1234, 0, "1234.mp4", db.TRANSCODE_FAILED))
+        self.assertEqual(1, db.insertTranscodedFileLocation(1235, 0, "1235.mp4", db.TRANSCODE_SUCCESSFUL))
+        records = db.getUnneededRawVideoRecords()
+        self.assertEqual(1, len(records))
+        self.assertEqual(1235, records[0].recordingID)
+        self.assertEqual("1235.mpeg", records[0].filename)
+        db.getUnneededRawVideoRecords()
 
 if __name__ == '__main__':
     unittest.main()  

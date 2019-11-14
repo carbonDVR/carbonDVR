@@ -2,6 +2,7 @@
 
 import sqlite3
 from datetime import datetime, timedelta
+from enum import Enum
 
 
 class Bunch:
@@ -9,9 +10,17 @@ class Bunch:
         self.__dict__.update(kwds)
 
 
+class TranscodingState(Enum):
+    SUCCESS = 0
+    FAILURE = 1
+
+
 class SqliteDatabase:
+    TRANSCODE_SUCCESSFUL = 0
+    TRANSCODE_FAILED = 1
+
     def __init__(self, dbFile):
-        self.connection = sqlite3.connect(dbFile)
+        self.connection = sqlite3.connect(dbFile, isolation_level=None)
 #        self.connection.autocommit = True
 
     def close(self):
@@ -96,6 +105,8 @@ class SqliteDatabase:
             WHERE file_raw_video.filename IS NOT NULL
             OR file_transcoded_video.filename IS NOT NULL;'''
         self.connection.executescript(schemaScript)
+        self.connection.execute("INSERT INTO uniqueid VALUES (1)")
+        self.connection.commit()
 
     def insertShow(self, showID, showType, name):
         cursor = self.connection.execute(
@@ -213,10 +224,10 @@ class SqliteDatabase:
         return prunedSchedules
 
     def getUniqueID(self):
-        self.connection.execute("BEGIN")
+        self.connection.execute("BEGIN TRANSACTION")
         uniqueID = self.connection.execute("SELECT nextID FROM uniqueid").fetchone()[0]
         self.connection.execute("DELETE FROM uniqueid")
-        self.connection.execute("INSERT INTO uniqueid VALUES (?)", (uniqueID + 1))
+        self.connection.execute("INSERT INTO uniqueid VALUES (?)", (uniqueID + 1,))
         self.connection.execute("COMMIT")
         return uniqueID
 
@@ -231,4 +242,76 @@ class SqliteDatabase:
             (recordingID, locationID, filename, state))
         self.connection.commit()
         return cursor.rowcount
+
+    def getRecordingsToBif(self):
+        cursor = self.connection.execute(
+            "SELECT recording_id, filename FROM file_transcoded_video WHERE state = 0 AND recording_id NOT IN (SELECT recording_id FROM file_bif);")
+        recordings = []
+        for row in cursor:
+            recordings.append(Bunch(recordingID=row[0], filename=row[1]))
+        self.connection.commit()
+        return recordings
+
+    def insertBifFileLocation(self, recordingID, locationID, filename):
+        cursor = self.connection.execute(
+            "INSERT INTO file_bif(recording_id, location_id, filename) VALUES (?, ?, ?)",
+            (recordingID, locationID, filename))
+        self.connection.commit()
+        return cursor.rowcount
+
+    def getUnreferencedRawVideoRecords(self):
+        query = str('SELECT recording_id, filename '
+                    'FROM file_raw_video '
+                    'WHERE recording_id NOT IN (SELECT recording_id FROM recording) '
+                    'ORDER BY recording_id;')
+        records = []
+        for row in self.connection.execute(query):
+            records.append(Bunch(recordingID=row[0], filename=row[1]))
+        return records
+
+    def deleteRawVideoRecord(self, recordingID):
+        cursor = self.connection.execute('DELETE FROM file_raw_video WHERE recording_id = ?', (recordingID, ))
+        self.connection.commit()
+        return cursor.rowcount
+
+    def getUnreferencedTranscodedVideoRecords(self):
+        query = str('SELECT recording_id, filename '
+                    'FROM file_transcoded_video '
+                    'WHERE recording_id NOT IN (SELECT recording_id FROM recording) '
+                    'ORDER BY recording_id;')
+        records = []
+        for row in self.connection.execute(query):
+            records.append(Bunch(recordingID=row[0], filename=row[1]))
+        return records
+
+    def deleteTranscodedVideoRecord(self, recordingID):
+        cursor = self.connection.execute('DELETE FROM file_transcoded_video WHERE recording_id = ?', (recordingID, ))
+        self.connection.commit()
+        return cursor.rowcount
+
+    def getUnreferencedBifRecords(self):
+        query = str('SELECT recording_id, filename '
+                    'FROM file_bif '
+                    'WHERE recording_id NOT IN (SELECT recording_id FROM recording) '
+                    'ORDER BY recording_id;')
+        records = []
+        for row in self.connection.execute(query):
+            records.append(Bunch(recordingID=row[0], filename=row[1]))
+        return records
+
+    def deleteBifRecord(self, recordingID):
+        cursor = self.connection.execute('DELETE FROM file_bif WHERE recording_id = ?', (recordingID, ))
+        self.connection.commit()
+        return cursor.rowcount
+
+    def getUnneededRawVideoRecords(self):
+        query = str('SELECT file_raw_video.recording_id, file_raw_video.filename '
+                    'FROM file_raw_video '
+                    'INNER JOIN file_transcoded_video USING (recording_id) '
+                    'WHERE file_transcoded_video.state = 0 '
+                    'ORDER BY file_raw_video.recording_id;')
+        records = []
+        for row in self.connection.execute(query):
+            records.append(Bunch(recordingID=row[0], filename=row[1]))
+        return records
 
