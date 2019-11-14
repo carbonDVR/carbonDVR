@@ -79,7 +79,7 @@ class SqliteDatabase:
             show_id        text,
             episode_id     text,
             date_recorded  integer,
-            duration       interval,
+            duration       integer,
             rerun_code     text,
             FOREIGN KEY (show_id, episode_id) REFERENCES episode(show_id, episode_id));
         CREATE TABLE file_raw_video (
@@ -138,14 +138,14 @@ class SqliteDatabase:
         numRowsInserted = 0
         cursor = self.connection.execute(
             'INSERT INTO schedule(channel_major, channel_minor, start_time, duration, show_id, episode_id, rerun_code) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (channelMajor, channelMinor, startTime.isoformat(), str(duration), showID, episodeID, rerunCode))
+            (channelMajor, channelMinor, startTime.isoformat(), duration.total_seconds(), showID, episodeID, rerunCode))
         self.connection.commit()
         return cursor.rowcount
 
     def insertRecording(self, recordingID, showID, episodeID, dateRecorded, duration, rerunCode):
         cursor = self.connection.execute(
             "INSERT INTO recording(recording_id, show_id, episode_id, date_recorded, duration, rerun_code) VALUES (?, ?, ?, ?, ?, ?)",
-            (recordingID, showID, episodeID, dateRecorded, str(duration), rerunCode))
+            (recordingID, showID, episodeID, dateRecorded, duration.total_seconds(), rerunCode))
         self.connection.commit()
         return cursor.rowcount
 
@@ -190,7 +190,8 @@ class SqliteDatabase:
                     "ORDER BY schedule.show_id, schedule.episode_id, schedule.start_time;")
         schedules = []
         for row in self.connection.execute(query):
-            schedules.append(Bunch(channelMajor=row[1], channelMinor=row[2], startTime=row[3], duration=row[4], showID=row[5], episodeID=row[6], rerunCode=row[7]))
+            duration = timedelta(seconds=row[4])
+            schedules.append(Bunch(channelMajor=row[1], channelMinor=row[2], startTime=row[3], duration=duration, showID=row[5], episodeID=row[6], rerunCode=row[7]))
         return schedules
 
     # this is the workaround hack
@@ -211,7 +212,8 @@ class SqliteDatabase:
         schedules = []
         for row in self.connection.execute(query, (startTime, endTime)):
             startTime = datetime.strptime(row[3], "%Y-%m-%dT%H:%M:%S.%f")
-            schedules.append(Bunch(channelMajor=row[1], channelMinor=row[2], startTime=startTime, duration=row[4], showID=row[5], episodeID=row[6], rerunCode=row[7]))
+            duration = timedelta(seconds=row[4])
+            schedules.append(Bunch(channelMajor=row[1], channelMinor=row[2], startTime=startTime, duration=duration, showID=row[5], episodeID=row[6], rerunCode=row[7]))
 
         # sqlite select statements don't support "DISTINCT ON (column1, column2)", so we have to roll our own
         usedKeys = set()
@@ -293,7 +295,7 @@ class SqliteDatabase:
         query = str('SELECT recording_id, filename '
                     'FROM file_bif '
                     'WHERE recording_id NOT IN (SELECT recording_id FROM recording) '
-                    'ORDER BY recording_id;')
+                    'ORDER BY recording_id')
         records = []
         for row in self.connection.execute(query):
             records.append(Bunch(recordingID=row[0], filename=row[1]))
@@ -309,9 +311,24 @@ class SqliteDatabase:
                     'FROM file_raw_video '
                     'INNER JOIN file_transcoded_video USING (recording_id) '
                     'WHERE file_transcoded_video.state = 0 '
-                    'ORDER BY file_raw_video.recording_id;')
+                    'ORDER BY file_raw_video.recording_id')
         records = []
         for row in self.connection.execute(query):
             records.append(Bunch(recordingID=row[0], filename=row[1]))
         return records
+
+    def selectRecordingsToTranscode(self):
+        query = "SELECT recording_id, filename FROM file_raw_video WHERE recording_id NOT IN (SELECT recording_id FROM file_transcoded_video)"
+        recordings = []
+        for row in self.connection.execute(query):
+           recordings.append(Bunch(recordingID=row[0], filename=row[1]))
+        return recordings
+
+    def getDuration(self, recordingID):
+        cursor = self.connection.execute("SELECT duration FROM recording WHERE recording_id = ?", (recordingID,))
+        row = cursor.fetchone()
+        if row :
+            return timedelta(seconds=row[0])
+        return timedelta(seconds=0)
+
 
