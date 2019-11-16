@@ -1,14 +1,25 @@
 import os
 import sqlite3
+import tzlocal
 import unittest
 from sqliteDatabase import SqliteDatabase, TranscodingState
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class TestSqliteDatabase(unittest.TestCase):
+
+    def test_schemaAutomaticallyInitialized(self):
+        db = SqliteDatabase(":memory:")
+        self.assertEqual(1, db.getSchemaVersion())
+
+    def test_schemaInitializationIsIdempotent(self):
+        db = SqliteDatabase(":memory:")
+        self.assertEqual(1, db.getSchemaVersion())
+        db.initializeSchema()
+        self.assertEqual(1, db.getSchemaVersion())
+
     def test_getTuners(self):
         db = SqliteDatabase(":memory:")
-        db.initializeSchema()
         self.assertEqual(1, db.insertTuner('foo','192.168.1.1',1))
         self.assertEqual(1, db.insertTuner('baz','10.10.10.1',0))
         tuners = sorted(db.getTuners(), key=lambda tuner:tuner.deviceID)
@@ -22,7 +33,6 @@ class TestSqliteDatabase(unittest.TestCase):
         
     def test_getChannels(self):
         db = SqliteDatabase(":memory:")
-        db.initializeSchema()
         self.assertEqual(1, db.insertChannel(4,1,5,1))
         self.assertEqual(1, db.insertChannel(19,3,18,2))
         self.assertEqual(1, db.insertChannel(5,2,37,3))
@@ -43,7 +53,6 @@ class TestSqliteDatabase(unittest.TestCase):
 
     def test_getUniqueID(self):
         db = SqliteDatabase(":memory:")
-        db.initializeSchema()
         uniqueID1 = db.getUniqueID();
         uniqueID2 = db.getUniqueID();
         uniqueID3 = db.getUniqueID();
@@ -54,8 +63,6 @@ class TestSqliteDatabase(unittest.TestCase):
 
     def test_getPendingRecordings(self):
         db = SqliteDatabase(":memory:")
-#        db = SqliteDatabase("/tmp/jnm001.dat")
-        db.initializeSchema()
         db.insertChannel(channelMajor=1, channelMinor=1, channelActual=14, program=1)
         db.insertShow(showID="show1", showType="comedy", name="Show #1")
         db.insertSubscription(showID="show1", priority=1)
@@ -63,9 +70,9 @@ class TestSqliteDatabase(unittest.TestCase):
         db.insertEpisode(showID="show1", episodeID="episode2", title="Show 1, Episode 2", description="")
 
         # scheduled recordings should be returned
-        scheduleTime1 = datetime.utcnow() + timedelta(hours=1)
+        scheduleTime1 = datetime.utcnow().replace(microsecond=0, tzinfo=timezone.utc) + timedelta(hours=1)
         scheduleDuration1 = timedelta(minutes=30)
-        scheduleTime2 = datetime.utcnow() + timedelta(hours=2)
+        scheduleTime2 = datetime.utcnow().replace(microsecond=0, tzinfo=timezone.utc) + timedelta(hours=2)
         scheduleDuration2 = timedelta(minutes=30)
         db.insertSchedule(1, 4, scheduleTime1, scheduleDuration1, "show1", "episode1", "N")
         db.insertSchedule(38, 2, scheduleTime2, scheduleDuration2, "show1", "episode2", "R")
@@ -124,7 +131,6 @@ class TestSqliteDatabase(unittest.TestCase):
 
     def test_getRecordingsToBif(self):
         db = SqliteDatabase(":memory:")
-        db.initializeSchema()
         db.insertTranscodedFileLocation(1167, 0, "file1.mp4", db.TRANSCODE_SUCCESSFUL)
         db.insertTranscodedFileLocation(1235, 0, "file2.mp4", db.TRANSCODE_SUCCESSFUL)
         db.insertTranscodedFileLocation(1311, 0, "file3.mp4", db.TRANSCODE_FAILED)
@@ -139,7 +145,6 @@ class TestSqliteDatabase(unittest.TestCase):
 
     def test_getUnreferencedRawVideoRecords(self):
         db = SqliteDatabase(":memory:")
-        db.initializeSchema()
         db.insertRecording(1234, "show1", "episode2", datetime.utcnow() - timedelta(weeks=1), timedelta(minutes=30), 'N')
         db.insertRawFileLocation(1234, "1234.mp4")
         db.insertRawFileLocation(1235, "1235.mp4")
@@ -150,7 +155,6 @@ class TestSqliteDatabase(unittest.TestCase):
 
     def test_deleteRawVideoRecord(self):
         db = SqliteDatabase(":memory:")
-        db.initializeSchema()
         db.insertRawFileLocation(1234, "1234.mp4")
         db.insertRawFileLocation(1235, "1235.mp4")
         records = sorted(db.getUnreferencedRawVideoRecords(), key=lambda x:x.recordingID)
@@ -164,7 +168,6 @@ class TestSqliteDatabase(unittest.TestCase):
 
     def test_getUnreferencedTranscodedVideoRecords(self):
         db = SqliteDatabase(":memory:")
-        db.initializeSchema()
         self.assertEqual(1, db.insertRecording(1234, "show1", "episode2", datetime.utcnow() - timedelta(weeks=1), timedelta(minutes=30), 'N'))
         self.assertEqual(1, db.insertTranscodedFileLocation(1234, 0, "1234.mp4", db.TRANSCODE_SUCCESSFUL))
         self.assertEqual(1, db.insertTranscodedFileLocation(1235, 0, "1235.mp4", db.TRANSCODE_FAILED))
@@ -175,7 +178,6 @@ class TestSqliteDatabase(unittest.TestCase):
 
     def test_deleteTranscodedVideoRecord(self):
         db = SqliteDatabase(":memory:")
-        db.initializeSchema()
         self.assertEqual(1, db.insertTranscodedFileLocation(1234, 0, "1234.mp4", db.TRANSCODE_SUCCESSFUL))
         self.assertEqual(1, db.insertTranscodedFileLocation(1235, 0, "1235.mp4", db.TRANSCODE_FAILED))
         records = db.getUnreferencedTranscodedVideoRecords()
@@ -189,7 +191,6 @@ class TestSqliteDatabase(unittest.TestCase):
 
     def test_getUnreferencedBifRecords(self):
         db = SqliteDatabase(":memory:")
-        db.initializeSchema()
         self.assertEqual(1, db.insertRecording(1234, "show1", "episode2", datetime.utcnow() - timedelta(weeks=1), timedelta(minutes=30), 'N'))
         self.assertEqual(1, db.insertBifFileLocation(1234, 0, "1234.bif"))
         self.assertEqual(1, db.insertBifFileLocation(1235, 0, "1235.bif"))
@@ -200,7 +201,6 @@ class TestSqliteDatabase(unittest.TestCase):
 
     def test_deleteBifRecord(self):
         db = SqliteDatabase(":memory:")
-        db.initializeSchema()
         self.assertEqual(1, db.insertBifFileLocation(1234, 0, "1234.bif"))
         self.assertEqual(1, db.insertBifFileLocation(1235, 0, "1235.bif"))
         records = db.getUnreferencedBifRecords()
@@ -214,7 +214,6 @@ class TestSqliteDatabase(unittest.TestCase):
 
     def test_getUnneededRawVideoRecords(self):
         db = SqliteDatabase(":memory:")
-        db.initializeSchema()
         self.assertEqual(1, db.insertRawFileLocation(1234, "1234.mpeg"))
         self.assertEqual(1, db.insertRawFileLocation(1235, "1235.mpeg"))
         self.assertEqual(1, db.insertRawFileLocation(1236, "1236.mpeg"))
@@ -228,7 +227,6 @@ class TestSqliteDatabase(unittest.TestCase):
 
     def test_selectRecordingsToTranscode(self):
         db = SqliteDatabase(":memory:")
-        db.initializeSchema()
         self.assertEqual(1, db.insertRawFileLocation(1234, "1234.mpeg2"))
         self.assertEqual(1, db.insertRawFileLocation(1235, "1235.mpeg2"))
         self.assertEqual(1, db.insertRawFileLocation(1236, "1236.mpeg2"))
@@ -244,12 +242,163 @@ class TestSqliteDatabase(unittest.TestCase):
 
     def test_getDuration(self):
         db = SqliteDatabase(":memory:")
-        db.initializeSchema()
         self.assertEqual(1, db.insertRecording(1234, "show1", "episode1", datetime.utcnow(), timedelta(minutes=30), 'N'))
         self.assertEqual(1, db.insertRecording(1235, "show1", "episode2", datetime.utcnow(), timedelta(minutes=59), 'N'))
         self.assertEqual(timedelta(minutes=30), db.getDuration(1234))
         self.assertEqual(timedelta(minutes=59), db.getDuration(1235))
         self.assertEqual(timedelta(seconds=0), db.getDuration(1236))
+
+    def test_getShowsWithRecordings(self):
+        db = SqliteDatabase(":memory:")
+        self.assertEqual(0, len(db.getShowsWithRecordings(['A', 'B'])))
+        self.assertEqual(1, db.insertShow(showID='show1', showType='comedy', name='ShowName1'))
+        self.assertEqual(1, db.insertShow(showID='show2', showType='comedy', name='ShowName2'))  # no recording
+        self.assertEqual(1, db.insertShow(showID='show3', showType='comedy', name='ShowName3'))  # no bif
+        self.assertEqual(1, db.insertShow(showID='show4', showType='comedy', name='ShowName4'))  # wrong categoryCode
+        self.assertEqual(1, db.insertShow(showID='show5', showType='comedy', name='ShowName5'))
+        recordDate = datetime(2019,11,15,19,00,00,00,timezone.utc)
+        self.assertEqual(1, db.insertRecording(recordingID=1001, showID='show1', episodeID='1', dateRecorded=recordDate, duration=timedelta(minutes=30), categoryCode='A'))
+        self.assertEqual(1, db.insertRecording(recordingID=1003, showID='show3', episodeID='1', dateRecorded=recordDate, duration=timedelta(minutes=30), categoryCode='A'))
+        self.assertEqual(1, db.insertRecording(recordingID=1004, showID='show4', episodeID='1', dateRecorded=recordDate, duration=timedelta(minutes=30), categoryCode='C'))
+        self.assertEqual(1, db.insertRecording(recordingID=1005, showID='show5', episodeID='1', dateRecorded=recordDate, duration=timedelta(minutes=30), categoryCode='B'))
+        self.assertEqual(1, db.insertBifFileLocation(recordingID=1001, locationID=1, filename="1001.bif"))
+        self.assertEqual(1, db.insertBifFileLocation(recordingID=1004, locationID=1, filename="1004.bif"))
+        self.assertEqual(1, db.insertBifFileLocation(recordingID=1005, locationID=1, filename="1005.bif"))
+        showsWithRecordings = db.getShowsWithRecordings(['A', 'B'])
+        self.assertEqual(2, len(showsWithRecordings))
+        self.assertEqual('show1', showsWithRecordings[0]['showID'])
+        self.assertEqual('ShowName1', showsWithRecordings[0]['name'])
+        self.assertIsNone(showsWithRecordings[0]['imageURL'])
+        self.assertEqual('show5', showsWithRecordings[1]['showID'])
+        self.assertEqual('ShowName5', showsWithRecordings[1]['name'])
+        self.assertIsNone(showsWithRecordings[1]['imageURL'])
+
+    def test_getEpisodeData(self):
+        db = SqliteDatabase(":memory:")
+        self.assertEqual(0, len(db.getEpisodeData('show1', 'A')))
+        self.assertEqual(1, db.insertShow(showID='show1', showType='comedy', name='The show name'))
+        self.assertEqual(1, db.insertEpisode(showID='show1', episodeID='7', title='Title7', description='Description7'))
+        self.assertEqual(1, db.insertEpisode(showID='show1', episodeID='14_3', title='Title14', description='Description14'))
+        self.assertEqual(1, db.insertEpisode(showID='show1', episodeID='5', title='Title5', description='Description5'))
+        self.assertEqual(1, db.insertEpisode(showID='show1', episodeID='3', title='Title3', description='Description3'))
+        recordDate1 = datetime(2019,11,15,19,00,00,00,timezone.utc)
+        recordDate2 = datetime(2019,11,15,20,00,00,00,timezone.utc)
+        recordDate3 = datetime(2019,11,16,18,00,00,00,timezone.utc)
+        recordDate4 = datetime(2019,11,16,23,00,00,00,timezone.utc)
+        self.assertEqual(1, db.insertRecording(recordingID=1567, showID='show1', episodeID='7', dateRecorded=recordDate3, duration=timedelta(minutes=30), categoryCode='C'))
+        self.assertEqual(1, db.insertRecording(recordingID=1839, showID='show1', episodeID='14_3', dateRecorded=recordDate4, duration=timedelta(minutes=30), categoryCode='A'))
+        self.assertEqual(1, db.insertRecording(recordingID=1511, showID='show1', episodeID='5', dateRecorded=recordDate2, duration=timedelta(minutes=30), categoryCode='A'))
+        self.assertEqual(1, db.insertRecording(recordingID=1492, showID='show1', episodeID='3', dateRecorded=recordDate1, duration=timedelta(minutes=30), categoryCode='B'))
+        self.assertEqual(1, db.insertTranscodedFileLocation(recordingID=1492, locationID=1, filename="1492.mp4", state=db.TRANSCODE_SUCCESSFUL))
+        self.assertEqual(1, db.insertBifFileLocation(recordingID=1492, locationID=1, filename="1492.bif"))
+        self.assertEqual(1, db.insertTranscodedFileLocation(recordingID=1511, locationID=1, filename="1511.mp4", state=db.TRANSCODE_FAILED))
+        self.assertEqual(1, db.insertBifFileLocation(recordingID=1511, locationID=1, filename="1511.bif"))
+        self.assertEqual(1, db.insertTranscodedFileLocation(recordingID=1567, locationID=2, filename="1567.mp4", state=db.TRANSCODE_SUCCESSFUL))
+        self.assertEqual(1, db.insertBifFileLocation(recordingID=1567, locationID=2, filename="1567.bif"))
+        self.assertEqual(1, db.insertTranscodedFileLocation(recordingID=1839, locationID=1, filename="1839.mp4", state=db.TRANSCODE_SUCCESSFUL))
+        self.assertEqual(1, db.insertBifFileLocation(recordingID=1839, locationID=1, filename="1839.bif"))
+        episodeData = db.getEpisodeData('show1', ['A', 'B'])
+        self.assertEqual(2, len(episodeData))
+        self.assertEqual(1492, episodeData[0]['recordingID'])
+        self.assertEqual('show1', episodeData[0]['showID'])
+        self.assertEqual('3', episodeData[0]['episodeID'])
+        self.assertEqual('Title3', episodeData[0]['episodeTitle'])
+        self.assertEqual('Description3', episodeData[0]['episodeDescription'])
+        self.assertIsNone(episodeData[0]['imageURL'])
+        self.assertIsNone(episodeData[0]['showImageURL'])
+        self.assertEqual(3, episodeData[0]['episodeNumber'])
+        self.assertEqual(1839, episodeData[1]['recordingID'])
+        self.assertEqual('show1', episodeData[1]['showID'])
+        self.assertEqual('14_3', episodeData[1]['episodeID'])
+        self.assertEqual('Title14', episodeData[1]['episodeTitle'])
+        self.assertEqual('Description14', episodeData[1]['episodeDescription'])
+        self.assertIsNone(episodeData[1]['imageURL'])
+        self.assertIsNone(episodeData[1]['showImageURL'])
+        self.assertEqual(14, episodeData[1]['episodeNumber'])
+
+    def test_getRecordingData(self):
+        db = SqliteDatabase(":memory:")
+        self.assertIsNone(db.getRecordingData(1492))
+        self.assertEqual(1, db.insertShow(showID='show1', showType='comedy', name='The show name'))
+        self.assertEqual(1, db.insertEpisode(showID='show1', episodeID='14_3', title='The episode title', description='a series of improbable events occurs'))
+        dateRecorded = datetime.utcnow().replace(microsecond=0, tzinfo=timezone.utc)
+        self.assertEqual(1, db.insertRecording(1492, 'show1', '14_3', dateRecorded, timedelta(minutes=30), 'A'))
+        recordingData = db.getRecordingData(1492)
+        self.assertIsNotNone(recordingData)
+        self.assertEqual(1492, recordingData['recordingID'])
+        self.assertEqual('The show name', recordingData['showName'])
+        self.assertIsNone(recordingData['imageURL'])
+        self.assertEqual('The episode title', recordingData['episodeTitle'])
+        self.assertEqual('a series of improbable events occurs', recordingData['episodeDescription'])
+        self.assertEqual(dateRecorded.astimezone(tzlocal.get_localzone()), recordingData['dateRecorded'])
+        self.assertEqual(timedelta(minutes=30), recordingData['duration'])
+        self.assertEqual('14', recordingData['episodeNumber'])
+
+    def test_getTranscodedVideoLocationID(self):
+        db = SqliteDatabase(":memory:")
+        self.assertEqual(0, db.getTranscodedVideoLocationID(1492))
+        self.assertEqual(1, db.insertTranscodedFileLocation(1492, 432, "1492.mp4", db.TRANSCODE_SUCCESSFUL))
+        self.assertEqual(1, db.insertTranscodedFileLocation(1567, 765, "1492.mp4", db.TRANSCODE_FAILED))
+        self.assertEqual(432, db.getTranscodedVideoLocationID(1492))
+        self.assertEqual(765, db.getTranscodedVideoLocationID(1567))
+        self.assertEqual(1, db.deleteTranscodedVideoRecord(1492))
+        self.assertEqual(1, db.deleteTranscodedVideoRecord(1567))
+        self.assertEqual(0, db.getBifLocationID(1492))
+        self.assertEqual(0, db.getBifLocationID(1567))
+
+    def test_getBifLocationID(self):
+        db = SqliteDatabase(":memory:")
+        self.assertEqual(0, db.getBifLocationID(1492))
+        self.assertEqual(1, db.insertBifFileLocation(1492, 123, "1492.bif"))
+        self.assertEqual(123, db.getBifLocationID(1492))
+        self.assertEqual(1, db.deleteBifRecord(1492))
+        self.assertEqual(0, db.getBifLocationID(1492))
+
+    def test_deleteRecording(self):
+        db = SqliteDatabase(":memory:")
+        db.insertRecording(1492, "show1", "episode1", datetime.utcnow() - timedelta(weeks=1), timedelta(minutes=30), 'A')
+        db.insertRecording(1567, "show1", "episode2", datetime.utcnow() - timedelta(weeks=1), timedelta(minutes=30), 'B')
+        self.assertEqual('A', db.getCategoryCode(1492))
+        self.assertEqual('B', db.getCategoryCode(1567))
+        self.assertEqual(1, db.deleteRecording(1567))
+        self.assertEqual('A', db.getCategoryCode(1492))
+        self.assertEqual('', db.getCategoryCode(1567))
+        self.assertEqual(1, db.deleteRecording(1492))
+        self.assertEqual('', db.getCategoryCode(1492))
+        self.assertEqual('', db.getCategoryCode(1567))
+
+    def test_setPlaybackPosition(self):
+        db = SqliteDatabase(":memory:")
+        self.assertEqual(1, db.setPlaybackPosition(1492, 206))
+        self.assertEqual({'playbackPosition':206}, db.getPlaybackPosition(1492))
+        self.assertEqual(1, db.setPlaybackPosition(1567, 821))
+        self.assertEqual({'playbackPosition':821}, db.getPlaybackPosition(1567))
+        self.assertEqual(1, db.setPlaybackPosition(1492, 473))
+        self.assertEqual({'playbackPosition':473}, db.getPlaybackPosition(1492))
+        self.assertEqual(1, db.setPlaybackPosition(1567, 214))
+        self.assertEqual({'playbackPosition':214}, db.getPlaybackPosition(1567))
+
+    def test_setCategoryCode(self):
+        db = SqliteDatabase(":memory:")
+        db.insertRecording(1492, "show1", "episode1", datetime.utcnow() - timedelta(weeks=1), timedelta(minutes=30), 'A')
+        db.insertRecording(1567, "show1", "episode2", datetime.utcnow() - timedelta(weeks=1), timedelta(minutes=30), 'B')
+        self.assertEqual('A', db.getCategoryCode(1492))
+        self.assertEqual('B', db.getCategoryCode(1567))
+        self.assertEqual(1, db.setCategoryCode(1492, 'C'))
+        self.assertEqual(1, db.setCategoryCode(1567, 'D'))
+        self.assertEqual('C', db.getCategoryCode(1492))
+        self.assertEqual('D', db.getCategoryCode(1567))
+
+    def test_getRemainingListingTime(self):
+        db = SqliteDatabase(":memory:")
+        scheduleTime1 = datetime.utcnow().replace(microsecond=0, tzinfo=timezone.utc) + timedelta(days=1,minutes=1)
+        scheduleTime2 = datetime.utcnow().replace(microsecond=0, tzinfo=timezone.utc) + timedelta(days=7,minutes=1)
+        scheduleTime3 = datetime.utcnow().replace(microsecond=0, tzinfo=timezone.utc) + timedelta(days=3,minutes=1)
+        db.insertSchedule(1, 4, scheduleTime1, timedelta(minutes=60), "show1", "episode1", "N")
+        db.insertSchedule(38, 2, scheduleTime2, timedelta(minutes=60), "show1", "episode2", "R")
+        db.insertSchedule(18, 3, scheduleTime3, timedelta(minutes=60), "show1", "episode2", "R")
+        self.assertEqual(7, db.getRemainingListingTime().days)
+
 
 if __name__ == '__main__':
     unittest.main()  
