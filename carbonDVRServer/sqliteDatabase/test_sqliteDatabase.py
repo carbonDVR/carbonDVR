@@ -1,6 +1,5 @@
 import os
 import sqlite3
-import tzlocal
 import unittest
 from sqliteDatabase import SqliteDatabase, toEpisodeNumber
 from datetime import datetime, timedelta, timezone
@@ -333,7 +332,7 @@ class TestSqliteDatabase(unittest.TestCase):
         self.assertIsNone(recordingData['imageURL'])
         self.assertEqual('The episode title', recordingData['episodeTitle'])
         self.assertEqual('a series of improbable events occurs', recordingData['episodeDescription'])
-        self.assertEqual(dateRecorded.astimezone(tzlocal.get_localzone()), recordingData['dateRecorded'])
+        self.assertEqual(dateRecorded, recordingData['dateRecorded'])
         self.assertEqual(timedelta(minutes=30), recordingData['duration'])
         self.assertEqual(14, recordingData['episodeNumber'])
 

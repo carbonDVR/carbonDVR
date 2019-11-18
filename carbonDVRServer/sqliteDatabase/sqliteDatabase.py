@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import tzlocal
 import re
 import sqlite3
 from collections import defaultdict
