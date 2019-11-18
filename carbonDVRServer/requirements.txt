@@ -2,4 +2,4 @@ apscheduler
 flask
 psycopg2
 pytz
-tzlocal
+tzlocal==1.5.1
