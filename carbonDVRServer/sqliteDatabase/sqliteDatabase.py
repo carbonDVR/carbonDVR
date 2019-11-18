@@ -3,19 +3,40 @@
 import tzlocal
 import re
 import sqlite3
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from enum import Enum
+
+
+def fromDatetime(datetimeValue):
+    if datetimeValue.tzinfo is None:
+        datetimeValue = datetimeValue.replace(tzinfo=timezone.utc)
+    return datetimeValue.strftime("%Y-%m-%dT%H:%M:%S%z")
+
+def toDatetime(fieldValue):
+    return datetime.strptime(fieldValue, "%Y-%m-%dT%H:%M:%S%z")
+
+def fromDuration(durationValue):
+    return durationValue.total_seconds()
+
+def toDuration(fieldValue):
+    return timedelta(seconds=fieldValue)
+
+# some entries in the listing data use unicode
+# converting to ascii saves some headache
+def toAscii(fieldValue):
+    return fieldValue.encode('ascii', 'xmlcharrefreplace').decode('ascii')
+
+# the episodeID may contain non-numeric values (e.g. "57_1", indicating part 1 of episode 57)
+# extract the leading digits and treat those as the episode number
+def toEpisodeNumber(episodeID):
+    return int(re.match('\d*', episodeID).group(0))
+
 
 
 
 class Bunch:
     def __init__(self, **kwds):
         self.__dict__.update(kwds)
-
-
-class TranscodingState(Enum):
-    SUCCESS = 0
-    FAILURE = 1
 
 
 class SqliteDatabase:
@@ -155,13 +176,9 @@ class SqliteDatabase:
         return cursor.rowcount
 
     def insertSchedule(self, channelMajor, channelMinor, startTime, duration, showID, episodeID, rerunCode):
-        if startTime.tzinfo is None:
-          startTime = startTime.replace(tzinfo=timezone.utc)
-        startTimeString = startTime.strftime("%Y-%m-%dT%H:%M:%S%z")
-        numRowsInserted = 0
         cursor = self.connection.execute(
             'INSERT INTO schedule(channel_major, channel_minor, start_time, duration, show_id, episode_id, rerun_code) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (channelMajor, channelMinor, startTimeString, duration.total_seconds(), showID, episodeID, rerunCode))
+            (channelMajor, channelMinor, fromDatetime(startTime), fromDuration(duration), showID, episodeID, rerunCode))
         self.connection.commit()
         return cursor.rowcount
 
@@ -169,7 +186,7 @@ class SqliteDatabase:
         dateRecordedString = dateRecorded.strftime("%Y-%m-%dT%H:%M:%S%z")
         cursor = self.connection.execute(
             "INSERT INTO recording(recording_id, show_id, episode_id, date_recorded, duration, category_code) VALUES (?, ?, ?, ?, ?, ?)",
-            (recordingID, showID, episodeID, dateRecordedString, duration.total_seconds(), categoryCode))
+            (recordingID, showID, episodeID, fromDatetime(dateRecorded), fromDuration(duration), categoryCode))
         self.connection.commit()
         return cursor.rowcount
 
@@ -187,6 +204,12 @@ class SqliteDatabase:
         self.connection.commit()
         return cursor.rowcount
 
+
+    #
+    # Functions used by recorder
+    #
+
+
     def getChannels(self):
         channels = []
         for row in self.connection.execute("SELECT major, minor, actual, program FROM channel"):
@@ -201,28 +224,27 @@ class SqliteDatabase:
 
     # this is the correct version, which we can't use until we install sqlite version 3.15.0 or higher
     def getPendingRecordings_correct(self):
-#        query = str("SELECT DISTINCT ON (schedule.show_id, schedule.episode_id) "
-        query = str("SELECT "
+        query = str("SELECT DISTINCT ON (schedule.show_id, schedule.episode_id) "
                     "schedule.schedule_id, schedule.channel_major, schedule.channel_minor, schedule.start_time, "
                     "schedule.duration, schedule.show_id, schedule.episode_id, schedule.rerun_code "
                     "FROM schedule "
                     "INNER JOIN subscription ON (schedule.show_id = subscription.show_id) "
-                    "WHERE schedule.start_time > datetime('now') "
-                    "AND schedule.start_time < datetime('now', '+12 hours')"
+                    "WHERE schedule.start_time > ? "
+                    "AND schedule.start_time < ? "
                     "AND (schedule.show_id, schedule.episode_id) NOT IN "
                         "(SELECT recorded_episodes_by_id.show_id, recorded_episodes_by_id.episode_id FROM recorded_episodes_by_id) "
-                    "ORDER BY schedule.show_id, schedule.episode_id, schedule.start_time;")
+                    "ORDER BY schedule.show_id, schedule.episode_id, schedule.start_time")
+        currentTime = fromDatetime(datetime.utcnow())
+        endTime = fromDatetime(datetime.utcnow() + timedelta(hours=12))
         schedules = []
-        for row in self.connection.execute(query):
-            duration = timedelta(seconds=row[4])
+        for row in self.connection.execute(query, (currentTime, endTime)):
+            duration = toDuration(row[4])
             schedules.append(Bunch(channelMajor=row[1], channelMinor=row[2], startTime=row[3], duration=duration, showID=row[5], episodeID=row[6], rerunCode=row[7]))
         return schedules
 
     # this is the workaround hack
     def getPendingRecordings(self):
-#        query = str("SELECT DISTINCT ON (schedule.show_id, schedule.episode_id) "
-        query = str("SELECT "
-                    "schedule.schedule_id, schedule.channel_major, schedule.channel_minor, schedule.start_time, "
+        query = str("SELECT schedule.schedule_id, schedule.channel_major, schedule.channel_minor, schedule.start_time, "
                     "schedule.duration, schedule.show_id, schedule.episode_id, schedule.rerun_code "
                     "FROM schedule "
                     "INNER JOIN subscription ON (schedule.show_id = subscription.show_id) "
@@ -230,13 +252,13 @@ class SqliteDatabase:
                     "AND schedule.start_time < ? "
                     "AND schedule.show_id || '-' || schedule.episode_id NOT IN "
                         "(SELECT recorded_episodes_by_id.show_id || '-' || recorded_episodes_by_id.episode_id FROM recorded_episodes_by_id) "
-                    "ORDER BY schedule.show_id, schedule.episode_id, schedule.start_time;")
-        startTime = datetime.utcnow().replace(tzinfo=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%z")
-        endTime = (datetime.utcnow() + timedelta(hours=12)).replace(tzinfo=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%z")
+                    "ORDER BY schedule.show_id, schedule.episode_id, schedule.start_time")
+        currentTime = fromDatetime(datetime.utcnow())
+        endTime = fromDatetime(datetime.utcnow() + timedelta(hours=12))
         schedules = []
-        for row in self.connection.execute(query, (startTime, endTime)):
-            startTime = datetime.strptime(row[3], "%Y-%m-%dT%H:%M:%S%z")
-            duration = timedelta(seconds=row[4])
+        for row in self.connection.execute(query, (currentTime, endTime)):
+            startTime = toDatetime(row[3])
+            duration = toDuration(row[4])
             schedules.append(Bunch(channelMajor=row[1], channelMinor=row[2], startTime=startTime, duration=duration, showID=row[5], episodeID=row[6], rerunCode=row[7]))
 
         # sqlite select statements don't support "DISTINCT ON (column1, column2)", so we have to roll our own
@@ -258,9 +280,15 @@ class SqliteDatabase:
         return uniqueID
 
     def insertRawFileLocation(self, recordingID, filename):
-        cursor = self.connection.execute("INSERT INTO file_raw_video(recording_id, filename) VALUES (?, ?);", (recordingID, filename))
+        cursor = self.connection.execute("INSERT INTO file_raw_video(recording_id, filename) VALUES (?, ?)", (recordingID, filename))
         self.connection.commit()
         return cursor.rowcount
+
+
+    #
+    # Functions used by transcoder
+    #
+
 
     def insertTranscodedFileLocation(self, recordingID, locationID, filename, state):
         cursor = self.connection.execute(
@@ -271,7 +299,7 @@ class SqliteDatabase:
 
     def getRecordingsToBif(self):
         cursor = self.connection.execute(
-            "SELECT recording_id, filename FROM file_transcoded_video WHERE state = 0 AND recording_id NOT IN (SELECT recording_id FROM file_bif);")
+            "SELECT recording_id, filename FROM file_transcoded_video WHERE state = 0 AND recording_id NOT IN (SELECT recording_id FROM file_bif)")
         recordings = []
         for row in cursor:
             recordings.append(Bunch(recordingID=row[0], filename=row[1]))
@@ -289,7 +317,7 @@ class SqliteDatabase:
         query = str('SELECT recording_id, filename '
                     'FROM file_raw_video '
                     'WHERE recording_id NOT IN (SELECT recording_id FROM recording) '
-                    'ORDER BY recording_id;')
+                    'ORDER BY recording_id')
         records = []
         for row in self.connection.execute(query):
             records.append(Bunch(recordingID=row[0], filename=row[1]))
@@ -304,7 +332,7 @@ class SqliteDatabase:
         query = str('SELECT recording_id, filename '
                     'FROM file_transcoded_video '
                     'WHERE recording_id NOT IN (SELECT recording_id FROM recording) '
-                    'ORDER BY recording_id;')
+                    'ORDER BY recording_id')
         records = []
         for row in self.connection.execute(query):
             records.append(Bunch(recordingID=row[0], filename=row[1]))
@@ -351,9 +379,15 @@ class SqliteDatabase:
     def getDuration(self, recordingID):
         cursor = self.connection.execute("SELECT duration FROM recording WHERE recording_id = ?", (recordingID,))
         row = cursor.fetchone()
-        if row :
-            return timedelta(seconds=row[0])
-        return timedelta(seconds=0)
+        if not row :
+            return timedelta(seconds=0)
+        return toDuration(row[0])
+
+
+    #
+    # Functions used by REST server
+    #
+
 
     def getShowsWithRecordings(self, categoryCodes):
         query = str("SELECT DISTINCT recording.show_id, show.name, show.imageURL "
@@ -382,9 +416,9 @@ class SqliteDatabase:
         recordings = []
         for categoryCode in categoryCodes:
             for row in self.connection.execute(query, (showID, categoryCode)):
-                episodeNumber = int(re.match('\d*', row[2]).group(0)) # match only leading digits (e.g. '1_2' is converted to '1')
-                episodeTitle = row[3].encode('ascii', 'xmlcharrefreplace').decode('ascii')           # compensate for Python's inability to cope with unicode
-                episodeDescription = row[4].encode('ascii', 'xmlcharrefreplace').decode('ascii')     # compensate for Python's inability to cope with unicode
+                episodeNumber = toEpisodeNumber(row[2])
+                episodeTitle = toAscii(row[3])
+                episodeDescription = toAscii(row[4])
                 recordings.append({
                     'recordingID':row[0],
                     'showID':row[1],
@@ -394,7 +428,7 @@ class SqliteDatabase:
                     'imageURL':row[5],
                     'showImageURL':row[6],
                     'episodeNumber':episodeNumber})
-        recordings = sorted(recordings, key=lambda x:x['episodeNumber'])
+        recordings.sort(key=lambda x:x['episodeNumber'])
         return recordings
 
     def getRecordingData(self, recordingID):
@@ -409,13 +443,12 @@ class SqliteDatabase:
         row = cursor.fetchone()
         if not row:
           return None
-        showName = row[1].encode('ascii', 'xmlcharrefreplace').decode('ascii')               # compensate for Python's inability to cope with unicode
-        showName = row[1].encode('ascii', 'xmlcharrefreplace').decode('ascii')               # compensate for Python's inability to cope with unicode
-        episodeTitle = row[3].encode('ascii', 'xmlcharrefreplace').decode('ascii')           # compensate for Python's inability to cope with unicode
-        episodeDescription = row[4].encode('ascii', 'xmlcharrefreplace').decode('ascii')     # compensate for Python's inability to cope with unicode
-        episodeNumber = re.match('\d*', row[5]).group(0) # match only leading digits (e.g. '1_2' is converted to '1')
-        dateRecorded = datetime.strptime(row[6], "%Y-%m-%dT%H:%M:%S%z").astimezone(tzlocal.get_localzone())
-        duration = timedelta(seconds=row[7])
+        showName = toAscii(row[1])
+        episodeTitle = toAscii(row[3])
+        episodeDescription = toAscii(row[4])
+        episodeNumber = toEpisodeNumber(row[5])
+        dateRecorded = toDatetime(row[6])
+        duration = toDuration(row[7])
         recordingData = {'recordingID':row[0], 'showName':showName, 'imageURL':row[2], 'episodeTitle':episodeTitle, 'episodeDescription':episodeDescription, 'dateRecorded':dateRecorded, 'duration':duration, 'episodeNumber':episodeNumber}
         return recordingData
 
@@ -465,10 +498,230 @@ class SqliteDatabase:
         return row[0]
 
     def getRemainingListingTime(self):
-        cursor = self.connection.execute('''SELECT max(start_time) FROM schedule;''')
+        cursor = self.connection.execute('SELECT max(start_time) FROM schedule')
         row = cursor.fetchone()
         if not row:
           return timedelta(seconds=0)
-        latestListing = datetime.strptime(row[0], "%Y-%m-%dT%H:%M:%S%z")
+        latestListing = toDatetime(row[0])
         return latestListing - datetime.utcnow().replace(tzinfo=timezone.utc)
+
+    #
+    # Functions used by UI Server
+    #
+
+    def getAllRecordings(self):
+        query = str("SELECT recording.recording_id, show.name, episode.episode_id, episode.title, recording.date_recorded, recording.duration "
+                    "FROM recording "
+                    "INNER JOIN show ON (recording.show_id = show.show_id) "
+                    "INNER JOIN episode ON (recording.show_id = episode.show_id AND recording.episode_id = episode.episode_id) "
+                    "WHERE recording.recording_id IN (SELECT recording_id FROM file_raw_video UNION SELECT recording_id FROM file_transcoded_video) "
+                    "ORDER BY date_recorded DESC")
+        recordings = []
+        for row in self.connection.execute(query):
+            show = toAscii(row[1])
+            episodeNumber = toEpisodeNumber(row[2])
+            episode = toAscii(row[3])
+            dateRecorded = toDatetime(row[4])
+            duration = toDuration(row[5])
+            recordings.append(Bunch(recordingID=row[0], show=show, episode=episode, episodeNumber=episodeNumber, dateRecorded=dateRecorded, duration=duration))
+        return recordings
+
+    def getRecentRecordings(self):
+        # fetch from database
+        query = str("SELECT recording.recording_id, show.name, episode.episode_id, episode.title, recording.date_recorded, recording.duration "
+                    "FROM recording "
+                    "INNER JOIN show ON (recording.show_id = show.show_id) "
+                    "INNER JOIN episode ON (recording.show_id = episode.show_id AND recording.episode_id = episode.episode_id) "
+                    "WHERE date_recorded > ? "
+                    "ORDER BY date_recorded DESC")
+        cutoffTime = (datetime.utcnow() - timedelta(days=2)).replace(tzinfo=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%z")
+        recordings = []
+        for row in self.connection.execute(query, (cutoffTime,)):
+            show = toAscii(row[1])
+            episodeNumber = toEpisodeNumber(row[2])
+            episode = toAscii(row[3])
+            dateRecorded = toDatetime(row[4])
+            duration = toDuration(row[5])
+            recordings.append(Bunch(recordingID=row[0], show=show, episodeNumber=episodeNumber, episode=episode, dateRecorded=dateRecorded, duration=duration))
+        return recordings
+
+    def getUpcomingRecordings(self):
+        query = str("SELECT schedule.start_time, schedule.channel_major, schedule.channel_minor,"
+                    "show.show_id, show.name, episode.episode_id, episode.title "
+                    "FROM schedule "
+                    "INNER JOIN subscription ON (schedule.show_id = subscription.show_id) "
+                    "INNER JOIN show ON (schedule.show_id = show.show_id) "
+                    "INNER JOIN episode ON (schedule.show_id = episode.show_id AND schedule.episode_id = episode.episode_id) "
+                    "WHERE schedule.start_time >= ? "
+                    "AND schedule.show_id || '-' || schedule.episode_id NOT IN "
+                        "(SELECT recorded_episodes_by_id.show_id || '-' || recorded_episodes_by_id.episode_id FROM recorded_episodes_by_id) "
+                    "ORDER BY schedule.start_time, schedule.show_id, schedule.episode_id")
+        currentTime = fromDatetime(datetime.utcnow())
+        schedules = []
+        for row in self.connection.execute(query, (currentTime,)):
+            startTime = toDatetime(row[0])
+            channel = '{}.{}'.format(row[1], row[2])
+            showID = row[3]
+            showName = toAscii(row[4])
+            episodeNumber = toEpisodeNumber(row[5])
+            episodeTitle = toAscii(row[6])
+            schedules.append(Bunch(startTime=startTime, channel=channel, showID=showID, show=showName, episodeID=row[5], episodeNumber=episodeNumber, episode=episodeTitle))
+
+        # sqlite select statements don't support "DISTINCT ON (column1, column2)", so we have to roll our own
+        usedKeys = set()
+        prunedSchedules = []
+        for schedule in schedules:
+            key = (schedule.showID, schedule.episodeID)
+            if key not in usedKeys:
+                prunedSchedules.append(schedule)
+                usedKeys.add(key);
+        return prunedSchedules
+
+    def getShowList(self):
+        subscribedShows = []
+        for row in self.connection.execute('SELECT show.show_id, show.name FROM show, subscription WHERE show.show_id = subscription.show_id order by show.name'):
+            showID = row[0]
+            showName = toAscii(row[1])
+            subscribedShows.append(Bunch(showID=showID, name=showName))
+        unsubscribedShows = []
+        for row in self.connection.execute('SELECT show_id, name FROM show WHERE show_id NOT IN (SELECT show_id FROM subscription) order by name'):
+            showID = row[0]
+            showName = toAscii(row[1])
+            unsubscribedShows.append(Bunch(showID=showID, name=showName))
+        return Bunch(subscribed=subscribedShows, unsubscribed=unsubscribedShows)
+
+    def subscribe(self, showID):
+        return self.insertSubscription(showID)
+
+    def unsubscribe(self, showID):
+        return self.deleteSubscription(showID)
+
+    def getRecordingsWithoutFileRecords(self):
+        query = str('SELECT recording.recording_id, show.name, episode.title, date_recorded '
+                    'FROM recording '
+                    'JOIN episode USING (show_id, episode_id) '
+                    'JOIN show USING (show_id) '
+                    'LEFT JOIN file_raw_video ON (recording.recording_id = file_raw_video.recording_id) '
+                    'LEFT JOIN file_transcoded_video ON (recording.recording_id = file_transcoded_video.recording_id) '
+                    'WHERE file_raw_video.filename IS NULL '
+                    'AND file_transcoded_video.filename IS NULL')
+        result = []
+        for row in self.connection.execute(query):
+            showName = toAscii(row[1])
+            episodeName = toAscii(row[2])
+            dateRecorded = toDatetime(row[3])
+            result.append(Bunch(recordingID=row[0], show=showName, episode=episodeName, dateRecorded=dateRecorded))
+        return result
+
+#    def getFileRecordsWithoutRecordings(self):
+#        query = str('SELECT recording_id, file_raw_video.filename, file_transcoded_video.filename, file_bif.filename '
+#                    'FROM file_raw_video '
+#                    'FULL JOIN file_transcoded_video USING (recording_id) '
+#                    'FULL JOIN file_bif USING (recording_id) '
+#                    'WHERE recording_id NOT IN (SELECT recording_id FROM recording)'
+#                    'ORDER BY recording_id')
+#        result = []
+#        for row in self.connection.execute(query):
+#            result.append(Bunch(recordingID=row[0], rawVideo=row[1], transcodedVideo=row[2], bif=row[3]))
+#        return result
+
+    # sqlite does not support full joins, so we have to perform three separate queries and join them in python
+    def getFileRecordsWithoutRecordings(self):
+        query1 = str('SELECT recording_id, filename '
+                     'FROM file_raw_video '
+                     'WHERE recording_id NOT IN (SELECT recording_id FROM recording)')
+        query2 = str('SELECT recording_id, filename '
+                     'FROM file_transcoded_video '
+                     'WHERE recording_id NOT IN (SELECT recording_id FROM recording)')
+        query3 = str('SELECT recording_id, filename '
+                     'FROM file_bif '
+                     'WHERE recording_id NOT IN (SELECT recording_id FROM recording)')
+        raw = { row[0]:row[1] for row in self.connection.execute(query1) }
+        transcoded = { row[0]:row[1] for row in self.connection.execute(query2) }
+        bif = { row[0]:row[1] for row in self.connection.execute(query3) }
+
+        result = []
+        for key in set(raw.keys()) | set(transcoded.keys()) | set(bif.keys()):
+          result.append(Bunch(recordingID=key, rawVideo=raw.get(key), transcodedVideo=transcoded.get(key), bif=bif.get(key)))
+        return result
+
+    def getRawVideoFilesThatCanBeDeleted(self):
+        query = str('SELECT recording_id, file_raw_video.filename, file_transcoded_video.filename '
+                    'FROM file_raw_video '
+                    'INNER JOIN file_transcoded_video USING (recording_id) '
+                    'WHERE file_transcoded_video.state = 0 '
+                    'ORDER BY file_raw_video.recording_id')
+        result = []
+        for row in self.connection.execute(query):
+            result.append(Bunch(recordingID=row[0], rawVideo=row[1], transcodedVideo=row[2]))
+        return result
+
+    def getInconsistencies(self):
+        return Bunch(
+            recordingsWithoutFileRecords=self.getRecordingsWithoutFileRecords(),
+            fileRecordsWithoutRecordings=self.getFileRecordsWithoutRecordings(),
+            rawVideoFilesThatCanBeDeleted=self.getRawVideoFilesThatCanBeDeleted())
+
+    def getTranscodingFailures(self):
+        query = str("SELECT recording.recording_id, show.name, episode.episode_id, episode.title, recording.date_recorded "
+                    "FROM recording "
+                    'JOIN episode USING (show_id, episode_id) '
+                    'JOIN show USING (show_id) '
+                    "WHERE recording.recording_id IN (SELECT recording_id FROM file_transcoded_video WHERE state = 1) "
+                    "ORDER BY date_recorded DESC")
+        recordings = []
+        for row in self.connection.execute(query):
+            show = toAscii(row[1])
+            episodeNumber = toEpisodeNumber(row[2])
+            episodeTitle = toAscii(row[3])
+            dateRecorded = toDatetime(row[4])
+            recordings.append(Bunch(recordingID=row[0], show=show, episode=episodeTitle, episodeNumber=episodeNumber, dateRecorded=dateRecorded))
+        return recordings
+
+    def getPendingTranscodingJobs(self):
+        query = str("SELECT recording.recording_id, show.name, episode.episode_id, episode.title, recording.date_recorded, recording.duration "
+                    "FROM recording "
+                    'JOIN episode USING (show_id, episode_id) '
+                    'JOIN show USING (show_id) '
+                    "WHERE recording.recording_id NOT IN (SELECT recording_id FROM file_transcoded_video) "
+                    "AND recording.recording_id IN (SELECT recording_id FROM file_raw_video) "
+                    "ORDER BY date_recorded DESC")
+        recordings = []
+        for row in self.connection.execute(query):
+            showName = toAscii(row[1])
+            episodeNumber = toEpisodeNumber(row[2])
+            episodeTitle = toAscii(row[3])
+            dateRecorded = toDatetime(row[4])
+            duration = toDuration(row[5])
+            recordings.append(Bunch(recordingID=row[0], show=showName, episode=episodeTitle, episodeNumber=episodeNumber, dateRecorded=dateRecorded, duration=duration))
+        return recordings
+
+    def insertTestShow(self):
+        # is the 'test' show already present?
+        cursor = self.connection.execute("SELECT show_id FROM show WHERE show_id = 'test'")
+        if cursor.fetchone() is not None:
+            return
+        # insert the 'test' show
+        self.connection.execute("INSERT INTO show (show_id, show_type, name, imageurl) VALUES ('test', 'EP', 'Test Show', NULL);")
+
+    def scheduleTestRecording(self):
+        self.insertTestShow()
+        episodeID = self.getUniqueID()
+        scheduleID = self.getUniqueID()
+        query = str("INSERT INTO episode (show_id, episode_id, title, description, imageurl) "
+                    "VALUES ('test', ?, 'TrinTV Test Episode', 'This is a test episode for TrinTV', NULL)")
+        self.connection.execute(query, (episodeID, ))
+        query = str("INSERT INTO schedule (schedule_id, channel_major, channel_minor, start_time, duration, show_id, episode_id, rerun_code) "
+                    "VALUES (?, '41', '1', ?, 120, 'test', ?, 'R')")
+        startTime = fromDatetime(datetime.utcnow() + timedelta(seconds=30))
+        cursor = self.connection.execute(query, (scheduleID, startTime, episodeID))
+        self.connection.commit()
+        return cursor.rowcount
+
+    def deleteFailedTranscode(self, recordingID):
+        query = str("DELETE FROM file_transcoded_video WHERE recording_id = ? AND state = 1;")
+        cursor = self.connection.execute(query, (recordingID, ))
+        self.connection.commit()
+        return cursor.rowcount
+
 

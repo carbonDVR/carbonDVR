@@ -211,7 +211,7 @@ class UIServerDB_Postgres:
         return scheduleID
 
 
-    def dbInsertTestShow(self):
+    def insertTestShow(self):
         with self.dbConnection.cursor() as cursor:
             # is the 'test' show already present?
             cursor.execute("SELECT show_id FROM show WHERE show_id = 'test';")
@@ -222,7 +222,7 @@ class UIServerDB_Postgres:
 
 
     def scheduleTestRecording(self):
-        self.dbInsertTestShow()
+        self.db.insertTestShow()
         uniqueID = self.getNextScheduleID()
         with self.dbConnection.cursor() as cursor:
             query = str("INSERT INTO episode (show_id, episode_id, title, description, imageurl) "
