@@ -1,2 +1,1 @@
 from transcoder.transcoder import Transcoder
-from transcoder.transcoder import TranscoderDB_Postgres

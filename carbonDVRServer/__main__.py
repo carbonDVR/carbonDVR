@@ -1,19 +1,24 @@
 #!/usr/bin/env python3.4
 
-import sys, os, os.path
+from datetime import timezone
 import logging
-import psycopg2
-import pytz
+import os
+import os.path
+import sys
 import time
 
-import fetchXTVD
-import fileLocations
-import parseXTVD
-import recorder
-import transcoder
+import pytz
+
 import bifGen
 import cleanup
+#import fetchXTVD
+import fileLocations
+#import parseXTVD
+import recorder
+from sqliteDatabase import SqliteDatabase
+import transcoder
 import webServer
+
 
 class ConfigHolder:
     pass
@@ -39,8 +44,6 @@ if __name__ == '__main__':
     logger = logging.getLogger(__name__)
 
     carbonDVRConfig = ConfigHolder()
-    carbonDVRConfig.dbConnectString = getMandatoryEnvVar('CARBONDVR_DB_CONNECT_STRING')
-    carbonDVRConfig.schema = getMandatoryEnvVar('CARBONDVR_DB_SCHEMA')
     carbonDVRConfig.webserverPort = getMandatoryEnvVar('CARBONDVR_WEBSERVER_PORT')
     carbonDVRConfig.listingsFetchTime = time.strptime(getMandatoryEnvVar('CARBONDVR_LISTINGS_FETCH_TIME'), '%H:%M:%S')
     carbonDVRConfig.fileLocations = fileLocations.FileLocations(getMandatoryEnvVar('CARBONDVR_FILE_LOCATIONS'))
@@ -75,56 +78,51 @@ if __name__ == '__main__':
     restConfig = ConfigHolder()
     restConfig.restServerURL = getMandatoryEnvVar('RESTSERVER_RESTSERVER_URL')
 
-    dbConnection = psycopg2.connect(carbonDVRConfig.dbConnectString)
-    if carbonDVRConfig.schema is not None:
-        with dbConnection:
-            with dbConnection.cursor() as cursor:
-                cursor.execute("SET SCHEMA %s", (carbonDVRConfig.schema, ))
-    with dbConnection:
-        with dbConnection.cursor() as cursor:
-            cursor.execute("SET TIMEZONE TO UTC;")
+    dbConnection = SqliteDatabase("/opt/carbonDVR/lib/carbonDVR.sqlite")
 
     scheduler = BackgroundScheduler(timezone=pytz.utc)
     logging.getLogger('apscheduler').setLevel(logging.WARNING)            # turn down the logging from apscheduler
     logging.getLogger('apscheduler.scheduler').setLevel(logging.ERROR)    # turn down the logging from apscheduler
 
-    recorderDBInterface = recorder.CarbonDVRDatabase(dbConnection)
+    recorderDBInterface = dbConnection
     channels = recorderDBInterface.getChannels()
     tuners = recorderDBInterface.getTuners()
     hdhomerun = recorder.HDHomeRunInterface(channels, tuners, recorderConfig.hdhomerunBinary)
     recorder = recorder.Recorder(scheduler, hdhomerun, recorderDBInterface, recorderConfig.videoFilespec, recorderConfig.logFilespec)
 
-    transcoderDB = transcoder.TranscoderDB_Postgres(dbConnection)
+    transcoderDB = dbConnection
     transcoder = transcoder.Transcoder(transcoderDB, transcoderConfig.lowCommand, transcoderConfig.mediumCommand, transcoderConfig.highCommand,
         transcoderConfig.outputFilespec, transcoderConfig.logFilespec)
     scheduler.add_job(transcoder.transcodeRecordings, trigger=IntervalTrigger(seconds=60))
 
-    bifGenDB = bifGen.BifGenDB_Postgres(dbConnection)
+    bifGenDB = dbConnection
     bifGen = bifGen.BifGen(bifGenDB, bifGenConfig.imageCommand, bifGenConfig.imageDir, bifGenConfig.bifFilespec, bifGenConfig.frameInterval)
     scheduler.add_job(bifGen.bifRecordings, trigger=IntervalTrigger(seconds=60))
 
-    cleanupDB = cleanup.CleanupDB_Postgres(dbConnection)
+    cleanupDB = dbConnection
     cleanup = cleanup.Cleanup(cleanupDB)
     scheduler.add_job(cleanup.cleanup, trigger=IntervalTrigger(minutes=60))
 
-    def fetchListings():
-        fetchXTVD.fetchXTVDtoFile(fetchXTVDConfig.schedulesDirectUsername, fetchXTVDConfig.schedulesDirectPassword, fetchXTVDConfig.listingsFile)
-        dbInterface = parseXTVD.carbonDVRDatabase(dbConnection, carbonDVRConfig.schema)
-        parseXTVD.parseXTVD(fetchXTVDConfig.listingsFile, dbInterface)
-    fetchTrigger = CronTrigger(hour = carbonDVRConfig.listingsFetchTime.tm_hour, minute = carbonDVRConfig.listingsFetchTime.tm_min)
-    scheduler.add_job(fetchListings, trigger=fetchTrigger, misfire_grace_time=3600)
+# temporarily disable XTVD while we're migrating to carbon.trinaria.com
+#    def fetchListings():
+#        fetchXTVD.fetchXTVDtoFile(fetchXTVDConfig.schedulesDirectUsername, fetchXTVDConfig.schedulesDirectPassword, fetchXTVDConfig.listingsFile)
+#        dbInterface = parseXTVD.carbonDVRDatabase(dbConnection, carbonDVRConfig.schema)
+#        parseXTVD.parseXTVD(fetchXTVDConfig.listingsFile, dbInterface)
+#    fetchTrigger = CronTrigger(hour = carbonDVRConfig.listingsFetchTime.tm_hour, minute = carbonDVRConfig.listingsFetchTime.tm_min)
+#    scheduler.add_job(fetchListings, trigger=fetchTrigger, misfire_grace_time=3600)
 
 
-    scheduler.start();
+# temporarily disable scheduler, while we're migrating to carbon.trinaria.com
+#    scheduler.start();
 
 
     def scheduleRecordingsCallback():
         recorder.scheduleRecordings()
 
     logging.getLogger('werkzeug').setLevel(logging.WARNING)            # turn down the logging from werkzeug
-    restServerDB = webServer.RestServerDB_Postgres(dbConnection)
+    restServerDB = dbConnection
     webServer.webServerApp.restServer = webServer.RestServer(restServerDB, carbonDVRConfig.fileLocations, restConfig.restServerURL)
-    uiServerDB = webServer.UIServerDB_Postgres(dbConnection)
+    uiServerDB = dbConnection
     webServer.webServerApp.uiServer = webServer.UIServer(uiServerDB, uiConfig.uiServerURL, scheduleRecordingsCallback)
 
     # There's something about the web vivaldi browser that cause flask to block, so that can't process requests from other clients.
@@ -133,5 +131,6 @@ if __name__ == '__main__':
     # Likely culprit is some kind of keep-alive mechanism.
     # As a (dubious and risky) workaround, enable multithreading in flask, so that other threads are available to service the non-vivaldi clients.
 #    webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort), threaded=True, debug=True)
-    webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort), threaded=True)
+#    webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort), threaded=True)
+    webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort), threaded=False)
 

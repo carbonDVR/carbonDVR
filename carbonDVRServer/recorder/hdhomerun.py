@@ -8,7 +8,6 @@ import subprocess
 import signal
 import threading
 import time
-import pytz
 
 from bunch import Bunch
 
@@ -124,7 +123,7 @@ class HDHomeRunInterface:
         self.logger.info("Recording: {}".format(cmd))
         processHandle = subprocess.Popen(cmd, stdout=logFileHandle, stderr=subprocess.STDOUT)
         # sleep until time to stop recording
-        currentTime = datetime.datetime.utcnow().replace(tzinfo=pytz.utc)  # for reasons which beggar the imagination, 'utcnow' returns a datatime w/o a timezone
+        currentTime = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)  # for reasons which beggar the imagination, 'utcnow' returns a datatime w/o a timezone
         duration = endTime - currentTime
         self.logger.info("Recording for {} seconds".format(duration.total_seconds()))
         time.sleep(duration.total_seconds())

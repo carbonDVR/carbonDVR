@@ -1,6 +1,5 @@
 #!/usr/bin/env python3.4
 
-import psycopg2
 import logging
 import os
 import subprocess
@@ -78,26 +77,6 @@ def makeBIF( filename, directory, interval ):
         f.write(data)
 
     f.close()
-
-
-class BifGenDB_Postgres:
-    def __init__(self, dbConnection):
-        self.dbConnection = dbConnection
-
-    def getRecordingsToBif(self):
-        recordings = []
-        with self.dbConnection.cursor() as cursor:
-            cursor.execute("SELECT recording_id, filename FROM file_transcoded_video WHERE state = %s AND recording_id NOT IN (SELECT recording_id FROM file_bif);", (0, ))
-            for row in cursor:
-                recordings.append({'recordingID':row[0], 'filename':row[1]})
-        self.dbConnection.commit()
-        return recordings
-
-    def insertBifFileLocation(self, recordingID, locationID, filename):
-        with self.dbConnection.cursor() as cursor:
-            cursor.execute("INSERT INTO file_bif(recording_id, location_id, filename) VALUES (%s, %s, %s)", (recordingID, locationID, filename))
-        self.dbConnection.commit()
-
 
 
 class BifGen:

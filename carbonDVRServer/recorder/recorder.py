@@ -32,7 +32,7 @@ class Recorder:
         with self.schedulingLock:
             self.logger.info("Scheduling recordings")
             self.removeAllRecordingJobs()
-            pendingRecordings = self.dbInterface.getPendingRecordings(timedelta(hours=12))
+            pendingRecordings = self.dbInterface.getPendingRecordings()
             pendingRecordings.sort(key=lambda pendingRecording: pendingRecording.startTime) # not really necessary, just makes log files easier to follow
             for pendingRecording in pendingRecordings:
                 self.logger.info("Scheduling recording on channel {}-{} at {}".

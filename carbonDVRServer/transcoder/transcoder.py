@@ -2,11 +2,8 @@
 
 import os, os.path
 import logging
-import time
 import subprocess
 import io
-import psycopg2
-import datetime
 
 
 
@@ -18,36 +15,6 @@ def getMegabitsPerSecond(filename, duration):
         return 0
     filesize = os.path.getsize(filename)
     return int((filesize/duration.total_seconds())/125000)
-
-
-class TranscoderDB_Postgres:
-    def __init__(self, dbConnection):
-        self.dbConnection = dbConnection
-
-    def selectRecordingsToTranscode(self):
-        recordings = []
-        with self.dbConnection.cursor() as cursor:
-            cursor.execute("SELECT recording_id, filename FROM file_raw_video WHERE recording_id NOT IN (SELECT recording_id FROM file_transcoded_video);")
-            for row in cursor:
-                recordings.append({'recordingID':row[0], 'filename':row[1]})
-        self.dbConnection.commit()
-        return recordings
-
-    def getDuration(self, recordingID):
-        duration = datetime.timedelta(seconds=0)
-        with self.dbConnection.cursor() as cursor:
-            cursor.execute("SELECT duration FROM recording WHERE recording_id = %s;", (recordingID,))
-            row = cursor.fetchone()
-            if row :
-                duration = row[0]
-        self.dbConnection.commit()
-        return duration
-
-    def insertTranscodedFileLocation(self, recordingID, locationID, filename, state):
-        with self.dbConnection.cursor() as cursor:
-            cursor.execute("INSERT INTO file_transcoded_video(recording_id, location_id, filename, state) VALUES (%s, %s, %s, %s)", (recordingID, locationID, filename, state))
-        self.dbConnection.commit()
-
 
 
 class Transcoder:

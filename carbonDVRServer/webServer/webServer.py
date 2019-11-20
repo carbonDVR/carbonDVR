@@ -3,7 +3,6 @@
 import flask
 import logging
 import os
-import psycopg2
 import sys
 
 webServerApp = flask.Flask(__name__)

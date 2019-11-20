@@ -1,5 +1,5 @@
-apscheduler
+apscheduler==3.0.4
 flask
-psycopg2
-pytz
+pytz==2015.7
+six==1.10.0
 tzlocal==1.5.1
