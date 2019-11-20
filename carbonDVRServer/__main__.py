@@ -106,7 +106,6 @@ if __name__ == '__main__':
 #    fetchTrigger = CronTrigger(hour = carbonDVRConfig.listingsFetchTime.tm_hour, minute = carbonDVRConfig.listingsFetchTime.tm_min)
 #    scheduler.add_job(fetchListings, trigger=fetchTrigger, misfire_grace_time=3600)
 
-
     scheduler.start();
 
     def scheduleRecordingsCallback():
@@ -122,6 +121,5 @@ if __name__ == '__main__':
     # Likely culprit is some kind of keep-alive mechanism.
     # As a (dubious and risky) workaround, enable multithreading in flask, so that other threads are available to service the non-vivaldi clients.
 #    webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort), threaded=True, debug=True)
-#    webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort), threaded=True)
-    webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort), threaded=False)
+    webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort), threaded=True)
 

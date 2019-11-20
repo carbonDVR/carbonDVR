@@ -4,7 +4,7 @@ import threading
 
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from recorder.hdhomerun import UnrecognizedChannelException, NoTunersAvailableException, BadRecordingException
 
 
@@ -42,10 +42,11 @@ class Recorder:
     def record(self, schedule):
         self.logger.info("Recording channel {}-{}".format(schedule.channelMajor, schedule.channelMinor))
         recordingID = self.dbInterface.getUniqueID()
+        dateRecorded = datetime.utcnow().replace(tzinfo=timezone.utc)
         destinationFile = self.videoFilespec.format(recordingID=recordingID)
         logFile = self.logFilespec.format(recordingID=recordingID)
         stopTime = schedule.startTime + schedule.duration
-        self.dbInterface.insertRecording(recordingID, schedule.showID, schedule.episodeID, schedule.duration, schedule.rerunCode)
+        self.dbInterface.insertRecording(recordingID, schedule.showID, schedule.episodeID, dateRecorded, schedule.duration, schedule.rerunCode)
         try:
             self.hdhomerunInterface.record(schedule.channelMajor, schedule.channelMinor, stopTime, destinationFile, logFile)
             self.logger.info("Successfully recorded")
