@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import re
 import sqlite3
 from collections import defaultdict
@@ -723,4 +724,12 @@ class SqliteDatabase:
         self.connection.commit()
         return cursor.rowcount
 
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='SqliteDatabase utilities')
+    parser.add_argument('dbFile', help='The filename of the database to open or initialize')
+    parser.add_argument('--init', action='store_true',  help='Initialize database')
+    args = parser.parse_args()
+    if args.init:
+        db = SqliteDatabase(args.dbFile)
 
