@@ -5,7 +5,7 @@ import threading
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime, timedelta
-from hdhomerun import UnrecognizedChannelException, NoTunersAvailableException, BadRecordingException
+from recorder.hdhomerun import UnrecognizedChannelException, NoTunersAvailableException, BadRecordingException
 
 
 

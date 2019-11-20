@@ -1,15 +1,9 @@
 #!/usr/bin/env python3.4
 
-import os, os.path
+import os
 import logging
-import io
 import subprocess
 import threading
-
-
-class Bunch:
-    def __init__(self, **kwds):
-        self.__dict__.update(kwds)
 
 
 class Cleanup:

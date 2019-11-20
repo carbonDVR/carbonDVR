@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
 import argparse
-import re
-import sqlite3
 from datetime import datetime, timedelta, timezone
+import re
+
+from bunch import Bunch
+import sqlite3
 
 
 def fromDatetime(datetimeValue):
@@ -30,12 +32,6 @@ def toAscii(fieldValue):
 def toEpisodeNumber(episodeID):
     return int(re.match('\d*', episodeID).group(0))
 
-
-
-
-class Bunch:
-    def __init__(self, **kwds):
-        self.__dict__.update(kwds)
 
 
 class SqliteDatabase:

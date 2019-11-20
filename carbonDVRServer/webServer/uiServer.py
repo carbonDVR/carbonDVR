@@ -1,12 +1,15 @@
 #!/usr/bin/env python3.4
 
-from flask import render_template
 import logging
 import os
 
-class Bunch():
-    def __init__(self, **kwds):
-        self.__dict__.update(kwds)
+from bunch import Bunch
+from flask import render_template
+import tzlocal
+
+
+class ShowData:
+    pass
 
 
 class UIServer:
@@ -31,6 +34,8 @@ class UIServer:
 
     def getUpcomingRecordings(self):
         schedules = self.db.getUpcomingRecordings()
+        for schedule in schedules:
+            schedule.startTime = schedule.startTime.astimezone(tzlocal.get_localzone())
         return render_template('upcomingRecordings.html', schedules=schedules)
 
     def getShowList(self):
@@ -58,7 +63,9 @@ class UIServer:
         recordingsByShow = {}
         for showName in set([x.show for x in allRecordings]):
           recordings = [x for x in allRecordings if x.show == showName]
-          showData = Bunch(name=showName, numRecordings=len(recordings))
+          showData = ShowData()
+          showData.name=showName
+          showData.numRecordings=len(recordings)
           showList.append(showData)
           recordingsByShow[showData] = recordings
         showList = sorted(showList, key=lambda x: x.name)

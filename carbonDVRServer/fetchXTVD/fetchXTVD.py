@@ -1,19 +1,21 @@
 #!/usr/bin/env python3.4
 
-import codecs
-import encodings
-import gzip
+import argparse
+from datetime import datetime, timedelta, timezone
 import logging
+import os
 import string
 import sys
 import time
+
+import codecs
+import encodings
+import gzip
 import urllib.request
 import urllib.parse
-import argparse
-import os
 import requests
 from requests.auth import HTTPBasicAuth
-from datetime import datetime, timedelta, timezone
+
 
 # fetchXTVD is adapted from code released into the Public Domain by Keith Medcalf
 # original license statement follows:

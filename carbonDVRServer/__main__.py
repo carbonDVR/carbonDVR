@@ -7,13 +7,16 @@ import os.path
 import sys
 import time
 
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 import pytz
 
 import bifGen
 import cleanup
-#import fetchXTVD
+import fetchXTVD
 import fileLocations
-#import parseXTVD
+import parseXTVD
 import recorder
 from sqliteDatabase import SqliteDatabase
 import transcoder
@@ -23,10 +26,6 @@ import webServer
 class ConfigHolder:
     pass
 
-
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.interval import IntervalTrigger
-from apscheduler.triggers.cron import CronTrigger
 
 def getMandatoryEnvVar(varName):
     logger = logging.getLogger(__name__)
@@ -90,40 +89,32 @@ if __name__ == '__main__':
     hdhomerun = recorder.HDHomeRunInterface(channels, tuners, recorderConfig.hdhomerunBinary)
     recorder = recorder.Recorder(scheduler, hdhomerun, recorderDBInterface, recorderConfig.videoFilespec, recorderConfig.logFilespec)
 
-    transcoderDB = dbConnection
-    transcoder = transcoder.Transcoder(transcoderDB, transcoderConfig.lowCommand, transcoderConfig.mediumCommand, transcoderConfig.highCommand,
+    transcoder = transcoder.Transcoder(dbConnection, transcoderConfig.lowCommand, transcoderConfig.mediumCommand, transcoderConfig.highCommand,
         transcoderConfig.outputFilespec, transcoderConfig.logFilespec)
     scheduler.add_job(transcoder.transcodeRecordings, trigger=IntervalTrigger(seconds=60))
 
-    bifGenDB = dbConnection
-    bifGen = bifGen.BifGen(bifGenDB, bifGenConfig.imageCommand, bifGenConfig.imageDir, bifGenConfig.bifFilespec, bifGenConfig.frameInterval)
+    bifGen = bifGen.BifGen(dbConnection, bifGenConfig.imageCommand, bifGenConfig.imageDir, bifGenConfig.bifFilespec, bifGenConfig.frameInterval)
     scheduler.add_job(bifGen.bifRecordings, trigger=IntervalTrigger(seconds=60))
 
-    cleanupDB = dbConnection
-    cleanup = cleanup.Cleanup(cleanupDB)
+    cleanup = cleanup.Cleanup(dbConnection)
     scheduler.add_job(cleanup.cleanup, trigger=IntervalTrigger(minutes=60))
 
 # temporarily disable XTVD while we're migrating to carbon.trinaria.com
 #    def fetchListings():
 #        fetchXTVD.fetchXTVDtoFile(fetchXTVDConfig.schedulesDirectUsername, fetchXTVDConfig.schedulesDirectPassword, fetchXTVDConfig.listingsFile)
-#        dbInterface = parseXTVD.carbonDVRDatabase(dbConnection, carbonDVRConfig.schema)
-#        parseXTVD.parseXTVD(fetchXTVDConfig.listingsFile, dbInterface)
+#        parseXTVD.parseXTVD(fetchXTVDConfig.listingsFile, dbConnection)
 #    fetchTrigger = CronTrigger(hour = carbonDVRConfig.listingsFetchTime.tm_hour, minute = carbonDVRConfig.listingsFetchTime.tm_min)
 #    scheduler.add_job(fetchListings, trigger=fetchTrigger, misfire_grace_time=3600)
 
 
-# temporarily disable scheduler, while we're migrating to carbon.trinaria.com
-#    scheduler.start();
-
+    scheduler.start();
 
     def scheduleRecordingsCallback():
         recorder.scheduleRecordings()
 
     logging.getLogger('werkzeug').setLevel(logging.WARNING)            # turn down the logging from werkzeug
-    restServerDB = dbConnection
-    webServer.webServerApp.restServer = webServer.RestServer(restServerDB, carbonDVRConfig.fileLocations, restConfig.restServerURL)
-    uiServerDB = dbConnection
-    webServer.webServerApp.uiServer = webServer.UIServer(uiServerDB, uiConfig.uiServerURL, scheduleRecordingsCallback)
+    webServer.webServerApp.restServer = webServer.RestServer(dbConnection, carbonDVRConfig.fileLocations, restConfig.restServerURL)
+    webServer.webServerApp.uiServer = webServer.UIServer(dbConnection, uiConfig.uiServerURL, scheduleRecordingsCallback)
 
     # There's something about the web vivaldi browser that cause flask to block, so that can't process requests from other clients.
     # If the vivaldi browser makes a second request, any pending requests from other clients are serviced, then the vivaldi request

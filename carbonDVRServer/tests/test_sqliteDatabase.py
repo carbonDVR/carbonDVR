@@ -1,8 +1,8 @@
-import os
-import sqlite3
-import unittest
-from sqliteDatabase import SqliteDatabase, toEpisodeNumber
 from datetime import datetime, timedelta, timezone
+import os
+import unittest
+
+from sqliteDatabase import SqliteDatabase, toEpisodeNumber
 
 
 class TestSqliteDatabase(unittest.TestCase):

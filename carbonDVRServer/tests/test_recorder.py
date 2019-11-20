@@ -8,8 +8,7 @@ from apscheduler.schedulers.background import BlockingScheduler
 from bunch import Bunch
 import pytz
 
-sys.path.append(os.path.join(os.path.dirname(__file__), os.path.pardir))
-from hdhomerun import HDHomeRunInterface, BadRecordingException
+from recorder.hdhomerun import HDHomeRunInterface, BadRecordingException
 from recorder import Recorder
 from sqliteDatabase import SqliteDatabase
 

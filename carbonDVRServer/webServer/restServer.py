@@ -1,14 +1,8 @@
 #!/usr/bin/env python3.4
 
 import datetime
-import json
-import os
+
 from xml.sax import saxutils
-
-
-class Bunch():
-    def __init__(self, **kwds):
-        self.__dict__.update(kwds)
 
 
 # We really would prefer to use JSON, instead of XML, but versions of the Roku SDK prior to 4.8 do not support JSON,
