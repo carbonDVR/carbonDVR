@@ -1,108 +1,15 @@
-#!/usr/bin/env python3.4
+#!/usr/bin/env python3
 
+import argparse
 import logging
-import psycopg2
+import os
+import sys
+
+sys.path.append(os.path.join(os.path.dirname(__file__), os.path.pardir))
+from bunch import Bunch
+import isodate
+from sqliteDatabase import SqliteDatabase
 from xml.etree import ElementTree
-
-
-class carbonDVRDatabase:
-    def __init__(self, dbConnection, schema):
-        self.connection = dbConnection
-
-    def commit(self):
-        self.connection.commit()
-
-    def insertShow(self, showID, showType, showName):
-        numRowsInserted = 0
-        with self.connection.cursor() as cursor:
-            cursor.execute("SELECT count(*) FROM show WHERE show_id = %s", (showID, ))
-            if cursor.fetchone()[0] == 0:
-                cursor.execute("INSERT INTO show(show_id, show_type, name) VALUES (%s, %s, %s)", (showID, showType, showName))
-                numRowsInserted += cursor.rowcount
-            else:
-                cursor.execute("UPDATE show set show_type = %s, name = %s WHERE show_id = %s", (showType, showName, showID))
-        return numRowsInserted
-
-    def insertEpisode(self, showID, episodeID, episodeTitle, episodeDescription, partCode):
-        numRowsInserted = 0
-        with self.connection.cursor() as cursor:
-            cursor.execute("SELECT count(*) FROM episode WHERE show_id = %s AND episode_id = %s", (showID, episodeID))
-            if cursor.fetchone()[0] == 0:
-                cursor.execute("INSERT INTO episode(show_id, episode_id, title, description, part_code) VALUES (%s, %s, %s, %s, %s)", (showID, episodeID, episodeTitle, episodeDescription, partCode))
-                numRowsInserted += cursor.rowcount
-        return numRowsInserted
-
-    def insertSchedule(self, channelMajor, channelMinor, startTime, duration, showID, episodeID, rerunCode):
-        numRowsInserted = 0
-        with self.connection.cursor() as cursor:
-            cursor.execute('INSERT INTO schedule(channel_major, channel_minor, start_time, duration, show_id, episode_id, rerun_code) VALUES (%s, %s, %s, %s, %s, %s, %s)',
-                           (channelMajor, channelMinor, startTime, duration, showID, episodeID, rerunCode))
-            numRowsInserted += cursor.rowcount
-        return numRowsInserted
-
-    def getChannels(self):
-        channelSet = set()
-        with self.connection.cursor() as cursor:
-            cursor.execute("SELECT major, minor FROM channel")
-            for row in cursor:
-                channelSet.add((row[0],row[1]))
-        return channelSet
-
-    def clearScheduleTable(self):
-        numRowsDeleted = 0
-        with self.connection.cursor() as cursor:
-            cursor.execute("DELETE FROM schedule")
-            numRowsDeleted += cursor.rowcount
-        return numRowsDeleted
-
-
-class sqliteDatabase:
-    def __init__(self, dbConnection):
-        self.connection = dbConnection
-
-    def commit(self):
-        self.connection.commit()
-
-    def insertShow(self, showID, showType, showName):
-        numRowsInserted = 0
-        cursor = self.connection.cursor();
-        cursor.execute("SELECT count(*) FROM show WHERE show_id = ?", (showID, ))
-        if cursor.fetchone()[0] == 0:
-            cursor.execute("INSERT INTO show(show_id, show_type, name) VALUES (?, ?, ?)", (showID, showType, showName))
-            numRowsInserted += cursor.rowcount
-        else:
-            cursor.execute("UPDATE show set show_type = ?, name = ? WHERE show_id = ?", (showType, showName, showID))
-        return numRowsInserted
-
-    def insertEpisode(self, showID, episodeID, episodeTitle, episodeDescription, partCode):
-        numRowsInserted = 0
-        cursor = self.connection.cursor();
-        cursor.execute("SELECT count(*) FROM episode WHERE show_id = ? AND episode_id = ?", (showID, episodeID))
-        if cursor.fetchone()[0] == 0:
-            cursor.execute("INSERT INTO episode(show_id, episode_id, title, description, part_code) VALUES (?, ?, ?, ?, ?)", (showID, episodeID, episodeTitle, episodeDescription, partCode))
-            numRowsInserted += cursor.rowcount
-        return numRowsInserted
-
-    def insertSchedule(self, channelMajor, channelMinor, startTime, duration, showID, episodeID, rerunCode):
-        numRowsInserted = 0
-        cursor = self.connection.cursor();
-        cursor.execute('INSERT INTO schedule(channel_major, channel_minor, start_time, duration, show_id, episode_id, rerun_code) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                           (channelMajor, channelMinor, startTime, duration, showID, episodeID, rerunCode))
-        return cursor.rowcount
-
-    def getChannels(self):
-        channelSet = set()
-        cursor = self.connection.cursor();
-        cursor.execute("SELECT major, minor FROM channel")
-        for row in cursor:
-            channelSet.add((row[0],row[1]))
-        return channelSet
-
-    def clearScheduleTable(self):
-        numRowsDeleted = 0
-        cursor = self.connection.cursor();
-        cursor.execute("DELETE FROM schedule")
-        return cursor.rowcount
 
 
 # helper class to extract Show Type, Show ID, and Episode ID from a Program ID
@@ -126,24 +33,12 @@ class ProgramID:
         return '0'
 
 
-class Station:
-    pass
-
-
-class Schedule:
-    pass
-
-
-class Program:
-    pass
-
-
 def extractStations(xmlElementTree):
     stations = {}
     for stationElement in xmlElementTree.getroot().findall(".//{urn:TMSWebServices}lineup/{urn:TMSWebServices}map"):
-        station = Station()
-        station.channelMajor = stationElement.attrib['channel']
-        station.channelMinor = stationElement.attrib['channelMinor']
+        station = Bunch(
+            channelMajor=stationElement.attrib['channel'],
+            channelMinor=stationElement.attrib['channelMinor'])
         stations[stationElement.attrib['station']] = station
     return stations
 
@@ -154,16 +49,17 @@ def extractSchedules(xmlElementTree, stationMap):
         stationData = stationMap.get(scheduleElement.attrib['station'])
         if stationData:
             programID = ProgramID(scheduleElement.attrib['program'])
-            schedule = Schedule()
-            schedule.channelMajor = stationData.channelMajor
-            schedule.channelMinor = stationData.channelMinor
-            schedule.startTime = scheduleElement.attrib['time']
-            schedule.duration = scheduleElement.attrib['duration']
-            schedule.showID = programID.showID()
-            schedule.episodeID = programID.episodeID()
-            schedule.rerunCode = 'R'
+            rerunCode = 'R'
             if scheduleElement.attrib.get('new') == 'true':
-                schedule.rerunCode = 'N'
+                rerunCode = 'N'
+            schedule = Bunch(
+                channelMajor=stationData.channelMajor,
+                channelMinor=stationData.channelMinor,
+                startTime=isodate.parse_datetime(scheduleElement.attrib['time']),
+                duration=isodate.parse_duration(scheduleElement.attrib['duration']),
+                showID=programID.showID(),
+                episodeID=programID.episodeID(),
+                rerunCode=rerunCode)
             schedules.append(schedule)
     return schedules
 
@@ -183,16 +79,16 @@ def extractPrograms(xmlElementTree):
     programs = []
     for programElement in xmlElementTree.getroot().findall(".//{urn:TMSWebServices}programs/{urn:TMSWebServices}program"):
         programID = ProgramID(programElement.attrib['id'])
-        program = Program()
-        program.programID = programElement.attrib['id']
-        program.showID = programID.showID()
-        program.showType = programID.showType()
-        program.series = programElement.findtext("{urn:TMSWebServices}series", "")
-        program.showName = programElement.findtext("{urn:TMSWebServices}title", "")
-        program.episodeID = programID.episodeID()
-        program.episodeTitle = programElement.findtext("{urn:TMSWebServices}subtitle", "")
-        program.episodeDescription = programElement.findtext("{urn:TMSWebServices}description", "")
-        program.episodeNumber = programElement.findtext("{urn:TMSWebServices}syndicatedEpisodeNumber", "")
+        program = Bunch(
+            programID=programElement.attrib['id'],
+            showID=programID.showID(),
+            showType=programID.showType(),
+            series=programElement.findtext("{urn:TMSWebServices}series", ""),
+            showName=programElement.findtext("{urn:TMSWebServices}title", ""),
+            episodeID=programID.episodeID(),
+            episodeTitle=programElement.findtext("{urn:TMSWebServices}subtitle", ""),
+            episodeDescription=programElement.findtext("{urn:TMSWebServices}description", ""),
+            episodeNumber=programElement.findtext("{urn:TMSWebServices}syndicatedEpisodeNumber", ""))
         programs.append(program)
     return programs
 
@@ -237,18 +133,12 @@ def parseXTVD(xtvdFile, db):
 
     # insert records
     logger.info('Inserting shows')
-    numShowsInserted = 0
-    for program in programs:
-        numShowsInserted += db.insertShow(program.showID, program.showType, program.showName);
-    db.commit()
+    numShowsInserted, numShowsUpdated = db.insertShows(programs)
     logger.info('%d shows inserted', numShowsInserted)
-
+    logger.info('%d shows updated', numShowsUpdated)
 
     logger.info('Inserting episodes')
-    numEpisodesInserted = 0
-    for program in addPartCodes(programs, partCodes):
-        numEpisodesInserted += db.insertEpisode(program.showID, program.episodeID, program.episodeTitle, program.episodeDescription, program.partCode)
-    db.commit();
+    numEpisodesInserted = db.insertEpisodes(programs)
     logger.info('%d episodes inserted', numEpisodesInserted)
 
     logger.info('Clearing schedule table')
@@ -256,17 +146,29 @@ def parseXTVD(xtvdFile, db):
     logger.info('%s rows deleted from schedule table', numRowsDeleted)
 
     logger.info('Fetching channel list')
-    channelSet = db.getChannels()
+    channels = db.getChannels()
+    channelSet = { (int(x.channelMajor), int(x.channelMinor)) for x in channels }
     logger.info('%s channels retrieved', len(channelSet))
 
     logger.info('Inserting schedules')
-    numSchedulesAttempted = 0
-    numSchedulesInserted = 0
-    for schedule in extractSchedulesWithValidChannels(schedules, channelSet):
-        numSchedulesAttempted += 1
-        numSchedulesInserted += db.insertSchedule(schedule.channelMajor, schedule.channelMinor, schedule.startTime, schedule.duration, schedule.showID, schedule.episodeID, schedule.rerunCode)
-    db.commit();
+    validSchedules = list(extractSchedulesWithValidChannels(schedules, channelSet))
+    numSchedulesInserted = db.insertSchedules(validSchedules)
     logger.info('%d of %d schedules inserted', numSchedulesInserted, len(schedules))
-    logger.info('%d schedules skipped (undefined channel)', len(schedules) - numSchedulesAttempted)
-    logger.info('%d schedule inserts failed', numSchedulesAttempted - numSchedulesInserted)
+    logger.info('%d schedules skipped (undefined channel)', len(schedules) - len(validSchedules))
+    logger.info('%d schedule inserts failed', len(validSchedules) - numSchedulesInserted)
+
+
+
+if __name__ == '__main__':
+    FORMAT = '%(asctime)-15s: %(name)s:  %(message)s'
+    logging.basicConfig(level=logging.INFO, format=FORMAT)
+    logger = logging.getLogger(__name__)
+
+    parser = argparse.ArgumentParser(description='Parse listings in XTVD format.')
+    parser.add_argument('-x', '--xtvdFile', dest='xtvdFile', default='/opt/carbonDVR/var/listings.xtvd')
+    parser.add_argument('-d', '--dbFile', dest='dbFile', default='/opt/carbonDVR/lib/carbonDVR.sqlite')
+    args = parser.parse_args()
+
+    dbConnection = SqliteDatabase(args.dbFile)
+    parseXTVD(args.xtvdFile, dbConnection)
 

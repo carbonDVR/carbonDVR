@@ -2,7 +2,7 @@ import pytz
 import unittest
 from bunch import Bunch
 from datetime import datetime
-from recorder.hdhomerun import ChannelMap, TunerList, HDHomeRunInterface, UnrecognizedChannelException, NoTunersAvailableException, BadRecordingException
+from hdhomerun import ChannelMap, TunerList, HDHomeRunInterface, UnrecognizedChannelException, NoTunersAvailableException, BadRecordingException
 from unittest.mock import Mock, patch, DEFAULT
 
 
@@ -105,7 +105,7 @@ class TestHDHomeRunInterface(unittest.TestCase):
 
     # trivial test which basically just looks for syntax errors
     def test_hdhomeruninterface_record_syntaxcheck(self):
-        with patch.multiple('recorder.hdhomerun', io=DEFAULT, os=DEFAULT, subprocess=DEFAULT, time=DEFAULT, isaValidRecording=DEFAULT) as patchMocks:
+        with patch.multiple('hdhomerun', io=DEFAULT, os=DEFAULT, subprocess=DEFAULT, time=DEFAULT, isaValidRecording=DEFAULT) as patchMocks:
             hdhomerunInterface = HDHomeRunInterface([], [], '/bin/false')
             hdhomerunInterface.logger = Mock()
             hdhomerunInterface.channelMap.getChannelInfo = Mock(autospec=True, return_value=self.channelA)

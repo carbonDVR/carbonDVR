@@ -5,7 +5,7 @@ import threading
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime, timedelta
-from .hdhomerun import UnrecognizedChannelException, NoTunersAvailableException, BadRecordingException
+from hdhomerun import UnrecognizedChannelException, NoTunersAvailableException, BadRecordingException
 
 
 
@@ -25,7 +25,7 @@ class Recorder:
         self.logger.debug('Removing recording jobs')
         for job in self.scheduler.get_jobs():
             if job.func == self.record:
-                self.logger.debug('Removing job: {}'.format(job))
+                self.logger.debug('Removing job: {}'.format(job.id))
                 self.scheduler.remove_job(job.id)
 
     def scheduleRecordings(self):
@@ -49,7 +49,7 @@ class Recorder:
         try:
             self.hdhomerunInterface.record(schedule.channelMajor, schedule.channelMinor, stopTime, destinationFile, logFile)
             self.logger.info("Successfully recorded")
-            self.dbInterface.insertRawVideoLocation(recordingID, destinationFile);
+            self.dbInterface.insertRawFileLocation(recordingID, destinationFile);
         except (UnrecognizedChannelException, NoTunersAvailableException, BadRecordingException):
             self.logger.error("Recording failed")
 

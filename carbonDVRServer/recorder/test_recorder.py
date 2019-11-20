@@ -1,16 +1,17 @@
-import pytz
-import unittest
-from apscheduler.schedulers.background import BlockingScheduler
-from recorder.carbonDVRDatabase import CarbonDVRDatabase
-from recorder.hdhomerun import HDHomeRunInterface, BadRecordingException
-from recorder.recorder import Recorder
 from datetime import datetime,timedelta
+import os
+import sys
+import unittest
 from unittest.mock import Mock, call
 
+from apscheduler.schedulers.background import BlockingScheduler
+from bunch import Bunch
+import pytz
 
-class Bunch:
-    def __init__(self, **kwds):
-        self.__dict__.update(kwds)
+sys.path.append(os.path.join(os.path.dirname(__file__), os.path.pardir))
+from hdhomerun import HDHomeRunInterface, BadRecordingException
+from recorder import Recorder
+from sqliteDatabase import SqliteDatabase
 
 
 class TestRecorder(unittest.TestCase):
@@ -19,7 +20,7 @@ class TestRecorder(unittest.TestCase):
         scheduler = Mock(BlockingScheduler)
         scheduler.get_jobs.return_value = []
         hdhomerun = Mock(HDHomeRunInterface)
-        db = Mock(CarbonDVRDatabase)
+        db = Mock(SqliteDatabase)
         db.getPendingRecordings.return_value = []
         recorder = Recorder(scheduler, hdhomerun, db, 'recs', 'logs')
         recorder.logger = Mock()
@@ -39,7 +40,7 @@ class TestRecorder(unittest.TestCase):
         scheduler = Mock(BlockingScheduler)
         scheduler.get_jobs.return_value = []
         hdhomerun = Mock(HDHomeRunInterface)
-        db = Mock(CarbonDVRDatabase)
+        db = Mock(SqliteDatabase)
         db.getPendingRecordings.return_value = []
         recorder = Recorder(scheduler, hdhomerun, db, 'recs', 'logs')
         recorder.logger = Mock()
@@ -55,7 +56,7 @@ class TestRecorder(unittest.TestCase):
         recorder.scheduleRecordings()
         # then: all existing recording jobs cleared, getPendingRecordings is called, new recording jobs are added
         recorder.removeAllRecordingJobs.assert_called_once()
-        db.getPendingRecordings.assert_called_once_with(timedelta(hours=12))
+        db.getPendingRecordings.assert_called_once()
         self.assertEqual(3, recorder.scheduler.add_job.call_count)
         call0 = call(recorder.record, args=[mockPendingRecordings[0]], trigger='date', run_date=mockPendingRecordings[0].startTime, misfire_grace_time=60)
         self.assertEqual(recorder.scheduler.add_job.call_args_list[0], call0)
@@ -68,7 +69,7 @@ class TestRecorder(unittest.TestCase):
         scheduler = Mock(BlockingScheduler)
         scheduler.get_jobs.return_value = []
         hdhomerun = Mock(HDHomeRunInterface)
-        db = Mock(CarbonDVRDatabase)
+        db = Mock(SqliteDatabase)
         db.getPendingRecordings.return_value = []
         recorder = Recorder(scheduler, hdhomerun, db, 'rec/recording_{recordingID}.mp4', 'logs/recording_{recordingID}.log')
         recorder.logger = Mock()
@@ -77,13 +78,13 @@ class TestRecorder(unittest.TestCase):
         recorder.record(schedule)
         db.insertRecording.assert_called_once_with(3, 'show1', 'episode1', timedelta(minutes=47), 'R')
         hdhomerun.record.assert_called_once_with(1, 2, datetime(1970,1,1,0,0,0) + timedelta(minutes=47), 'rec/recording_3.mp4', 'logs/recording_3.log')
-        db.insertRawVideoLocation.assert_called_once_with(3, 'rec/recording_3.mp4')
+        db.insertRawFileLocation.assert_called_once_with(3, 'rec/recording_3.mp4')
 
     def test_recorder_record_fail(self):
         scheduler = Mock(BlockingScheduler)
         scheduler.get_jobs.return_value = []
         hdhomerun = Mock(HDHomeRunInterface)
-        db = Mock(CarbonDVRDatabase)
+        db = Mock(SqliteDatabase)
         db.getPendingRecordings.return_value = []
         recorder = Recorder(scheduler, hdhomerun, db, '/var/spool/carbondvr/recordings/raw_{recordingID}.mp4', '/var/log/carbondvr/recordings/rec{recordingID}.log')
         recorder.logger = Mock()
@@ -94,7 +95,7 @@ class TestRecorder(unittest.TestCase):
         db.insertRecording.assert_called_once_with(58162, 'show2', 'episode2', timedelta(minutes=15), 'N')
         hdhomerun.record.assert_called_once_with(8, 3, datetime(1992,12,21,16,57,19) + timedelta(minutes=15),
                                                  '/var/spool/carbondvr/recordings/raw_58162.mp4', '/var/log/carbondvr/recordings/rec58162.log')
-        self.assertFalse(db.insertRawVideoLocation.called)
+        self.assertFalse(db.insertRawFileLocation.called)
 
 
 if __name__ == '__main__':

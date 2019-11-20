@@ -44,7 +44,6 @@ class SqliteDatabase:
 
     def __init__(self, dbFile):
         self.connection = sqlite3.connect(dbFile, isolation_level=None)
-#        self.connection.autocommit = True
         self.initializeSchema()
 
     def close(self):
@@ -155,6 +154,27 @@ class SqliteDatabase:
         self.connection.commit()
         return cursor.rowcount
 
+    def insertShows(self, programs):
+        numRowsInserted = 0
+        numRowsUpdated = 0
+        cursor = self.connection.cursor()
+        cursor.execute("BEGIN")
+        for program in programs:
+            cursor.execute("SELECT count(*) FROM show WHERE show_id = ?", (program.showID, ))
+            if cursor.fetchone()[0] == 0:
+                cursor.execute(
+                    "INSERT INTO show(show_id, show_type, name) VALUES (?, ?, ?)",
+                    (program.showID, program.showType, program.showName))
+                numRowsInserted += cursor.rowcount
+            else:
+                cursor.execute(
+                  "UPDATE show set show_type = ?, name = ? WHERE show_id = ?",
+                  (program.showType, program.showName, program.showID))
+                numRowsUpdated += cursor.rowcount
+        cursor.execute("COMMIT")
+        return numRowsInserted, numRowsUpdated
+
+
     def insertSubscription(self, showID, priority):
         cursor = self.connection.execute(
             "INSERT INTO subscription(show_id, priority) VALUES (?, ?)",
@@ -174,11 +194,52 @@ class SqliteDatabase:
         self.connection.commit()
         return cursor.rowcount
 
+    def insertEpisodes(self, programs):
+        numRowsInserted = 0
+        cursor = self.connection.cursor()
+        cursor.execute("BEGIN")
+        for program in programs:
+            cursor.execute("SELECT count(*) FROM episode WHERE show_id = ? AND episode_id = ?", (program.showID, program.episodeID))
+            if cursor.fetchone()[0] == 0:
+                cursor.execute(
+                    "INSERT INTO episode(show_id, episode_id, title, description) VALUES (?, ?, ?, ?)",
+                    (program.showID, program.episodeID, program.episodeTitle, program.episodeDescription))
+                numRowsInserted += cursor.rowcount
+        cursor.execute("COMMIT")
+        return numRowsInserted
+
     def insertSchedule(self, channelMajor, channelMinor, startTime, duration, showID, episodeID, rerunCode):
         cursor = self.connection.execute(
             'INSERT INTO schedule(channel_major, channel_minor, start_time, duration, show_id, episode_id, rerun_code) VALUES (?, ?, ?, ?, ?, ?, ?)',
             (channelMajor, channelMinor, fromDatetime(startTime), fromDuration(duration), showID, episodeID, rerunCode))
         self.connection.commit()
+        return cursor.rowcount
+
+    def insertSchedules(self, schedules):
+        numRowsInserted = 0
+        cursor = self.connection.cursor()
+        cursor.execute("BEGIN")
+        for schedule in schedules:
+            startTime = schedule.startTime
+            if startTime.tzinfo is None:
+                startTime = startTime.replace(tzinfo=timezone.utc)
+            cursor.execute(
+                'INSERT INTO schedule(channel_major, channel_minor, start_time, duration, show_id, episode_id, rerun_code) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                 (schedule.channelMajor,
+                  schedule.channelMinor,
+                  startTime.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                  schedule.duration.total_seconds(),
+                  schedule.showID,
+                  schedule.episodeID,
+                  schedule.rerunCode))
+            numRowsInserted += cursor.rowcount
+        cursor.execute("COMMIT")
+        return numRowsInserted
+
+    def clearScheduleTable(self):
+        numRowsDeleted = 0
+        cursor = self.connection.cursor()
+        cursor.execute("DELETE FROM schedule")
         return cursor.rowcount
 
     def insertRecording(self, recordingID, showID, episodeID, dateRecorded, duration, categoryCode):
