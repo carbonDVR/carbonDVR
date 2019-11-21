@@ -26,10 +26,14 @@ class UIServer:
 
     def getRecordingsByDate(self):
         recordings = self.db.getAllRecordings()
+        for recording in recordings:
+            recording.dateRecorded = recording.dateRecorded.astimezone(tzlocal.get_localzone())
         return render_template('recordingsByDate.html', recordings=recordings)
 
     def getRecentRecordings(self):
         recordings = self.db.getRecentRecordings()
+        for recording in recordings:
+            recording.dateRecorded = recording.dateRecorded.astimezone(tzlocal.get_localzone())
         return render_template('recentRecordings.html', recordings=recordings)
 
     def getUpcomingRecordings(self):
@@ -59,6 +63,8 @@ class UIServer:
 
     def getRecordingsByShow(self):
         allRecordings = self.db.getAllRecordings()
+        for recording in allRecordings:
+            recording.dateRecorded = recording.dateRecorded.astimezone(tzlocal.get_localzone())
         showList = []
         recordingsByShow = {}
         for showName in set([x.show for x in allRecordings]):

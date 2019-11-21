@@ -3,6 +3,7 @@
 import argparse
 from datetime import timezone
 import logging
+import os
 import time
 import yaml
 
@@ -37,9 +38,14 @@ if __name__ == '__main__':
 
     generalConfig = Bunch(
         listenPort = config['general']['listenPort'],
-        dbFile = config['general']['dbFile'])
+        dbFile = config['general']['dbFile'],
+        timezone = config['general']['timezone'])
     logger.info('Listen port: %d', generalConfig.listenPort)
     logger.info('Database file: %s', generalConfig.dbFile)
+    logger.info('timezone: %s', generalConfig.timezone)
+
+    # the tzlocal module requires the "TZ" environment variable
+    os.environ['TZ'] = generalConfig.timezone
 
     xtvdConfig = Bunch(
         schedulesDirectUsername = config['xtvd']['schedulesDirectUsername'],
