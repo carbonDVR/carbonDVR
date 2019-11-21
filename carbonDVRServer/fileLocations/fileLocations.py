@@ -3,10 +3,17 @@
 import json
 
 class FileLocations:
-    def __init__(self, locationString):
-        fileLocationsJson = json.loads(locationString)
-        if 'fileLocations' in fileLocationsJson:
-            self.fileLocations = fileLocationsJson['fileLocations']
+    def __init__(self, locationString=None, jsonFile=None):
+
+        if locationString is not None:
+            fileLocationsJson = json.loads(locationString)
+            if 'fileLocations' in fileLocationsJson:
+                self.fileLocations = fileLocationsJson['fileLocations']
+        elif jsonFile is not None:
+           with open(jsonFile) as jsonFileHandle:
+               fileLocationsJson = json.load(jsonFileHandle)
+           if 'fileLocations' in fileLocationsJson:
+               self.fileLocations = fileLocationsJson['fileLocations']
 
     def getRawVideoFilespec(self, locationID, recordingID):
         try:

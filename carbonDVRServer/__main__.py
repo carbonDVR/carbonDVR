@@ -1,40 +1,26 @@
 #!/usr/bin/env python3.4
 
+import argparse
 from datetime import timezone
 import logging
-import os
-import os.path
-import sys
 import time
+import yaml
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
+from bunch import Bunch
 import pytz
 
-import bifGen
-import cleanup
-import fetchXTVD
+from bifGen import BifGen
+from cleanup import Cleanup
+from fetchXTVD import fetchXTVDtoFile
 import fileLocations
-import parseXTVD
-import recorder
+from parseXTVD import parseXTVD
+from recorder import HDHomeRunInterface, Recorder
 from sqliteDatabase import SqliteDatabase
-import transcoder
+from transcoder import Transcoder
 import webServer
-
-
-class ConfigHolder:
-    pass
-
-
-def getMandatoryEnvVar(varName):
-    logger = logging.getLogger(__name__)
-    value = os.environ.get(varName)
-    if value is None:
-        logger.error('%s environment variable is not set', varName)
-        sys.exit(1)
-    logger.info('%s=%s', varName, value)
-    return value
 
 
 if __name__ == '__main__':
@@ -42,68 +28,94 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format=FORMAT, datefmt='%Y-%m-%d %H:%M:%S')
     logger = logging.getLogger(__name__)
 
-    carbonDVRConfig = ConfigHolder()
-    carbonDVRConfig.webserverPort = getMandatoryEnvVar('CARBONDVR_WEBSERVER_PORT')
-    carbonDVRConfig.listingsFetchTime = time.strptime(getMandatoryEnvVar('CARBONDVR_LISTINGS_FETCH_TIME'), '%H:%M:%S')
-    carbonDVRConfig.fileLocations = fileLocations.FileLocations(getMandatoryEnvVar('CARBONDVR_FILE_LOCATIONS'))
-    logger.info('Listing fetch time: %02d:%02d:00', carbonDVRConfig.listingsFetchTime.tm_hour, carbonDVRConfig.listingsFetchTime.tm_min)
+    parser = argparse.ArgumentParser(description='Run carbonDVR server.')
+    parser.add_argument('-c', '--configFile', dest='configFile', default='/opt/carbonDVR/etc/carbonDVR.cfg')
+    args = parser.parse_args()
 
-    fetchXTVDConfig = ConfigHolder()
-    fetchXTVDConfig.schedulesDirectUsername = getMandatoryEnvVar('SCHEDULES_DIRECT_USERNAME')
-    fetchXTVDConfig.schedulesDirectPassword = getMandatoryEnvVar('SCHEDULES_DIRECT_PASSWORD')
-    fetchXTVDConfig.listingsFile = getMandatoryEnvVar('CARBONDVR_LISTINGS_FILE')
+    with open(args.configFile) as yamlFile:
+      config = yaml.load(yamlFile)
 
-    recorderConfig = ConfigHolder()
-    recorderConfig.hdhomerunBinary = getMandatoryEnvVar('RECORDER_HDHOMERUN_BINARY')
-    recorderConfig.videoFilespec = getMandatoryEnvVar('RECORDER_VIDEO_FILESPEC')
-    recorderConfig.logFilespec = getMandatoryEnvVar('RECORDER_VIDEO_LOG_FILESPEC')
+    generalConfig = Bunch(
+        listenPort = config['general']['listenPort'],
+        dbFile = config['general']['dbFile'])
+    logger.info('Listen port: %d', generalConfig.listenPort)
+    logger.info('Database file: %s', generalConfig.dbFile)
 
-    transcoderConfig = ConfigHolder()
-    transcoderConfig.lowCommand = getMandatoryEnvVar('TRANSCODER_COMMAND_LOW')
-    transcoderConfig.mediumCommand = getMandatoryEnvVar('TRANSCODER_COMMAND_MEDIUM')
-    transcoderConfig.highCommand = getMandatoryEnvVar('TRANSCODER_COMMAND_HIGH')
-    transcoderConfig.outputFilespec = getMandatoryEnvVar('TRANSCODER_VIDEO_FILESPEC')
-    transcoderConfig.logFilespec = getMandatoryEnvVar('TRANSCODER_LOG_FILESPEC')
+    xtvdConfig = Bunch(
+        schedulesDirectUsername = config['xtvd']['schedulesDirectUsername'],
+        schedulesDirectPassword = config['xtvd']['schedulesDirectPassword'],
+        listingsFetchTime = time.strptime(config['xtvd']['listingsFetchTime'], '%H:%M:%S'),
+        listingsFile = config['xtvd']['listingsFile'])
+    logger.info('Listing fetch time: %02d:%02d:00', xtvdConfig.listingsFetchTime.tm_hour, xtvdConfig.listingsFetchTime.tm_min)
+    logger.info('Listing file: %s', xtvdConfig.listingsFile)
 
-    bifGenConfig = ConfigHolder()
-    bifGenConfig.imageCommand = getMandatoryEnvVar('BIFGEN_IMAGE_COMMAND')
-    bifGenConfig.imageDir = getMandatoryEnvVar('BIFGEN_IMAGE_DIR')
-    bifGenConfig.bifFilespec = getMandatoryEnvVar('BIFGEN_BIF_FILESPEC')
-    bifGenConfig.frameInterval = int(getMandatoryEnvVar('BIFGEN_FRAME_INTERVAL'))
+    recorderConfig = Bunch(
+        hdhomerunBinary = config['recorder']['hdhomerunBinary'],
+        videoFilespec = config['recorder']['videoFilespec'],
+        logFilespec = config['recorder']['logFilespec'])
+    logger.info('hdhomerunBinary: %s', recorderConfig.hdhomerunBinary)
+    logger.info('recorder videoFilespec: %s', recorderConfig.videoFilespec)
+    logger.info('recorder logFilespec: %s', recorderConfig.logFilespec)
 
-    uiConfig = ConfigHolder()
-    uiConfig.uiServerURL = getMandatoryEnvVar('UISERVER_UISERVER_URL')
+    transcoderConfig = Bunch(
+        lowCommand = config['transcoder']['lowCommand'].rstrip(),
+        mediumCommand = config['transcoder']['mediumCommand'].rstrip(),
+        highCommand = config['transcoder']['highCommand'].rstrip(),
+        outputFilespec = config['transcoder']['outputFilespec'],
+        logFilespec = config['transcoder']['logFilespec'])
+    logger.info('transcoder low resolution transcode command: %s', transcoderConfig.lowCommand)
+    logger.info('transcoder medium resolution transcode command: %s', transcoderConfig.mediumCommand)
+    logger.info('transcoder high resolution transcode command: %s', transcoderConfig.highCommand)
+    logger.info('transcoder outputFilespec: %s', transcoderConfig.outputFilespec)
+    logger.info('transcoder logFilespec: %s', transcoderConfig.logFilespec)
 
-    restConfig = ConfigHolder()
-    restConfig.restServerURL = getMandatoryEnvVar('RESTSERVER_RESTSERVER_URL')
+    bifGenConfig = Bunch(
+        imageCommand = config['bifGen']['imageCommand'],
+        imageDir = config['bifGen']['imageDir'],
+        bifFilespec = config['bifGen']['bifFilespec'],
+        frameInterval = int(config['bifGen']['frameInterval']))
+    logger.info('bifGen imageCommand: %s', bifGenConfig.imageCommand)
+    logger.info('bifGen imageDir: %s', bifGenConfig.imageDir)
+    logger.info('bifGen bifFilespec: %s', bifGenConfig.bifFilespec)
+    logger.info('bifGen frameInterval: %s', bifGenConfig.frameInterval)
 
-    dbConnection = SqliteDatabase("/opt/carbonDVR/lib/carbonDVR.sqlite")
+    uiConfig = Bunch(
+        uiServerURL = config['uiServer']['uiServerURL'])
+    logger.info('uiServer uiServerURL: %s', uiConfig.uiServerURL)
+
+    restConfig = Bunch(
+        restServerURL = config['restServer']['restServerURL'],
+        fileLocations = config['general']['fileLocations'])
+    logger.info('restServer restServerURL: %s', restConfig.restServerURL)
+    logger.info('File locations file: %s', restConfig.fileLocations)
+
 
     scheduler = BackgroundScheduler(timezone=pytz.utc)
     logging.getLogger('apscheduler').setLevel(logging.WARNING)            # turn down the logging from apscheduler
     logging.getLogger('apscheduler.scheduler').setLevel(logging.ERROR)    # turn down the logging from apscheduler
 
-    recorderDBInterface = dbConnection
-    channels = recorderDBInterface.getChannels()
-    tuners = recorderDBInterface.getTuners()
-    hdhomerun = recorder.HDHomeRunInterface(channels, tuners, recorderConfig.hdhomerunBinary)
-    recorder = recorder.Recorder(scheduler, hdhomerun, recorderDBInterface, recorderConfig.videoFilespec, recorderConfig.logFilespec)
+    dbConnection = SqliteDatabase(generalConfig.dbFile)
 
-    transcoder = transcoder.Transcoder(dbConnection, transcoderConfig.lowCommand, transcoderConfig.mediumCommand, transcoderConfig.highCommand,
+    channels = dbConnection.getChannels()
+    tuners = dbConnection.getTuners()
+    hdhomerun = HDHomeRunInterface(channels, tuners, recorderConfig.hdhomerunBinary)
+    recorder = Recorder(scheduler, hdhomerun, dbConnection, recorderConfig.videoFilespec, recorderConfig.logFilespec)
+
+    transcoder = Transcoder(dbConnection, transcoderConfig.lowCommand, transcoderConfig.mediumCommand, transcoderConfig.highCommand,
         transcoderConfig.outputFilespec, transcoderConfig.logFilespec)
     scheduler.add_job(transcoder.transcodeRecordings, trigger=IntervalTrigger(seconds=60))
 
-    bifGen = bifGen.BifGen(dbConnection, bifGenConfig.imageCommand, bifGenConfig.imageDir, bifGenConfig.bifFilespec, bifGenConfig.frameInterval)
+    bifGen = BifGen(dbConnection, bifGenConfig.imageCommand, bifGenConfig.imageDir, bifGenConfig.bifFilespec, bifGenConfig.frameInterval)
     scheduler.add_job(bifGen.bifRecordings, trigger=IntervalTrigger(seconds=60))
 
-    cleanup = cleanup.Cleanup(dbConnection)
+    cleanup = Cleanup(dbConnection)
     scheduler.add_job(cleanup.cleanup, trigger=IntervalTrigger(minutes=60))
 
 # temporarily disable XTVD while we're migrating to carbon.trinaria.com
 #    def fetchListings():
-#        fetchXTVD.fetchXTVDtoFile(fetchXTVDConfig.schedulesDirectUsername, fetchXTVDConfig.schedulesDirectPassword, fetchXTVDConfig.listingsFile)
-#        parseXTVD.parseXTVD(fetchXTVDConfig.listingsFile, dbConnection)
-#    fetchTrigger = CronTrigger(hour = carbonDVRConfig.listingsFetchTime.tm_hour, minute = carbonDVRConfig.listingsFetchTime.tm_min)
+#        fetchXTVDtoFile(xtvdConfig.schedulesDirectUsername, xtvdConfig.schedulesDirectPassword, xtvdConfig.listingsFile)
+#        parseXTVD(xtvdConfig.listingsFile, dbConnection)
+#    fetchTrigger = CronTrigger(hour = xtvdConfig.listingsFetchTime.tm_hour, minute = xtvdConfig.listingsFetchTime.tm_min)
 #    scheduler.add_job(fetchListings, trigger=fetchTrigger, misfire_grace_time=3600)
 
     scheduler.start();
@@ -112,7 +124,8 @@ if __name__ == '__main__':
         recorder.scheduleRecordings()
 
     logging.getLogger('werkzeug').setLevel(logging.WARNING)            # turn down the logging from werkzeug
-    webServer.webServerApp.restServer = webServer.RestServer(dbConnection, carbonDVRConfig.fileLocations, restConfig.restServerURL)
+    fileLocations = fileLocations.FileLocations(jsonFile=restConfig.fileLocations)
+    webServer.webServerApp.restServer = webServer.RestServer(dbConnection, fileLocations, restConfig.restServerURL)
     webServer.webServerApp.uiServer = webServer.UIServer(dbConnection, uiConfig.uiServerURL, scheduleRecordingsCallback)
 
     # There's something about the web vivaldi browser that cause flask to block, so that can't process requests from other clients.
@@ -120,6 +133,6 @@ if __name__ == '__main__':
     # is serviced, and then we're back to being blocked so that only the vivaldi browser can make requests.
     # Likely culprit is some kind of keep-alive mechanism.
     # As a (dubious and risky) workaround, enable multithreading in flask, so that other threads are available to service the non-vivaldi clients.
-#    webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort), threaded=True, debug=True)
-    webServer.webServerApp.run(host='0.0.0.0',port=int(carbonDVRConfig.webserverPort), threaded=True)
+#    webServer.webServerApp.run(host='0.0.0.0',port=generalConfig.listenPort, threaded=True, debug=True)
+    webServer.webServerApp.run(host='0.0.0.0',port=generalConfig.listenPort, threaded=True)
 

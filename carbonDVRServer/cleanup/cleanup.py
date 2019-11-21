@@ -13,7 +13,7 @@ class Cleanup:
 
     def purgeUnreferencedRawVideoRecords(self):
         logger = logging.getLogger(__name__)
-        for record in self.dbGetUnreferencedRawVideoRecords():
+        for record in self.db.getUnreferencedRawVideoRecords():
            logger.info('Deleting file: {}'.format(record.filename))
            try:
                os.unlink(record.filename)
