@@ -117,12 +117,11 @@ if __name__ == '__main__':
     cleanup = Cleanup(dbConnection)
     scheduler.add_job(cleanup.cleanup, trigger=IntervalTrigger(minutes=60))
 
-# temporarily disable XTVD while we're migrating to carbon.trinaria.com
-#    def fetchListings():
-#        fetchXTVDtoFile(xtvdConfig.schedulesDirectUsername, xtvdConfig.schedulesDirectPassword, xtvdConfig.listingsFile)
-#        parseXTVD(xtvdConfig.listingsFile, dbConnection)
-#    fetchTrigger = CronTrigger(hour = xtvdConfig.listingsFetchTime.tm_hour, minute = xtvdConfig.listingsFetchTime.tm_min)
-#    scheduler.add_job(fetchListings, trigger=fetchTrigger, misfire_grace_time=3600)
+    def fetchListings():
+        fetchXTVDtoFile(xtvdConfig.schedulesDirectUsername, xtvdConfig.schedulesDirectPassword, xtvdConfig.listingsFile)
+        parseXTVD(xtvdConfig.listingsFile, dbConnection)
+    fetchTrigger = CronTrigger(hour = xtvdConfig.listingsFetchTime.tm_hour, minute = xtvdConfig.listingsFetchTime.tm_min)
+    scheduler.add_job(fetchListings, trigger=fetchTrigger, misfire_grace_time=3600)
 
     scheduler.start();
 
