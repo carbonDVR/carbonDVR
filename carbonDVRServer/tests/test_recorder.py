@@ -2,7 +2,7 @@ from datetime import datetime,timedelta
 import os
 import sys
 import unittest
-from unittest.mock import Mock, call
+from unittest.mock import ANY, Mock, call
 
 from apscheduler.schedulers.background import BlockingScheduler
 from bunch import Bunch
@@ -75,7 +75,7 @@ class TestRecorder(unittest.TestCase):
         schedule = Bunch(channelMajor=1, channelMinor=2, startTime=datetime(1970,1,1,0,0,0), duration=timedelta(minutes=47), showID='show1', episodeID='episode1', rerunCode='R')
         db.getUniqueID.return_value = 3
         recorder.record(schedule)
-        db.insertRecording.assert_called_once_with(3, 'show1', 'episode1', timedelta(minutes=47), 'R')
+        db.insertRecording.assert_called_once_with(3, 'show1', 'episode1', ANY, timedelta(minutes=47), 'R')
         hdhomerun.record.assert_called_once_with(1, 2, datetime(1970,1,1,0,0,0) + timedelta(minutes=47), 'rec/recording_3.mp4', 'logs/recording_3.log')
         db.insertRawFileLocation.assert_called_once_with(3, 'rec/recording_3.mp4')
 
@@ -91,7 +91,7 @@ class TestRecorder(unittest.TestCase):
         db.getUniqueID.return_value = 58162
         hdhomerun.record.side_effect=BadRecordingException()
         recorder.record(schedule)
-        db.insertRecording.assert_called_once_with(58162, 'show2', 'episode2', timedelta(minutes=15), 'N')
+        db.insertRecording.assert_called_once_with(58162, 'show2', 'episode2', ANY, timedelta(minutes=15), 'N')
         hdhomerun.record.assert_called_once_with(8, 3, datetime(1992,12,21,16,57,19) + timedelta(minutes=15),
                                                  '/var/spool/carbondvr/recordings/raw_58162.mp4', '/var/log/carbondvr/recordings/rec58162.log')
         self.assertFalse(db.insertRawFileLocation.called)
