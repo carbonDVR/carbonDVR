@@ -454,15 +454,17 @@ class SqliteDatabase:
 
 
     def getShowsWithRecordings(self, categoryCodes):
+        # python's sqlite binding does not support passing a sequence into a single parameter
+        # we have to construct a query with the appropriate number of parameters
+        sqlParameterList = ', '.join('?'*len(categoryCodes))
         query = str("SELECT DISTINCT recording.show_id, show.name, show.imageURL "
                     "FROM recording, show "
                     "WHERE recording.show_id = show.show_id "
                     "AND recording.recording_id IN (SELECT recording_id FROM file_bif) "
-                    "AND recording.category_code = ?"
-                    "ORDER BY show.name")
+                    "AND recording.category_code IN ({})"
+                    "ORDER BY show.name").format(sqlParameterList)
         shows = []
-        for categoryCode in categoryCodes:
-          for row in self.getConnection().execute(query, (categoryCode,)):
+        for row in self.getConnection().execute(query, categoryCodes):
             shows.append({'showID':row[0], 'name':row[1], 'imageURL':row[2]})
         return shows
 
