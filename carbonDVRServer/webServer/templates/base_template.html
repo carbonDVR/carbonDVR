@@ -20,6 +20,7 @@
     }
   .pageBody {
     xpadding-left: 0.5em;
+    color: rgb(147,161,161);
     }
   td {
     white-space: nowrap;
@@ -86,7 +87,7 @@
 <DIV class="PageHeader">
 <TABLE width=100% class="title">
   <TR valign="bottom" class="titlebar">
-    <TD style="font-weight: bold; font-size: 120%; text-align: left" colspan=10>{% block title %}Title{% endblock %}</TD>
+    <TD style="color: rgb(147,161,161); font-weight: bold; font-size: 120%; text-align: left" colspan=10>{% block title %}Title{% endblock %}</TD>
   </TR>
   <TR valign="top" class="linkbar">
     <TD style="font-weight: normal; font-size: 80%; text-align: left"><A HREF="{{url_for('getIndex')}}">Home</A></TD>
